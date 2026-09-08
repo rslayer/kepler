@@ -16,3 +16,5 @@
 /runs/holdout.csv @rslayer
 
 /src/score_holdout.py @rslayer
+
+/tools/make_fixture.py @rslayer
