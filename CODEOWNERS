@@ -1,0 +1,18 @@
+# Frozen files. Only the human owner may approve changes to these.
+# Agents (researcher, adversary) must never edit them.
+
+/src/scorer.py    @rslayer
+/src/report.py    @rslayer
+
+# Fold logic in backtest.py is human-owned. Agents may add MODELS entries only;
+# any change to make_folds() / the fold loop requires human review.
+/src/backtest.py  @rslayer
+
+# Harness contracts
+/Makefile         @rslayer
+/SPEC.md          @rslayer
+/CODEOWNERS       @rslayer
+/data/snapshot/MANIFEST.txt @rslayer
+/runs/holdout.csv @rslayer
+
+/src/score_holdout.py @rslayer

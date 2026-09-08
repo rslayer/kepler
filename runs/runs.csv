@@ -1,0 +1,1 @@
+run_id,timestamp,git_commit,model_name,config_hash,fold_count,wrmsse,wape,bias,wape_h1_7,wape_h8_14,wape_h15_28,seconds,status,findings_file,author
