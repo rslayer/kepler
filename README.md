@@ -30,6 +30,13 @@ TLS interception.
 `src/backtest.py` are human-owned (see [CODEOWNERS](CODEOWNERS)). No agent edits them.
 `holdout/` is never read by any agent.
 
+## Validating without Kaggle data
+
+`tools/make_fixture.py` writes a synthetic fixture with M5's schema and dimensions
+(823 series x 1913 days, fake numbers) into `data/raw/`, so `make data` and
+`make backtest` can be exercised end to end without credentials. It is a harness test
+only - never report a number produced from it.
+
 ## Snapshot handling
 
 `data/snapshot/*.parquet` is **not** committed — git-lfs is not in use and M5 competition
