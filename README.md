@@ -1,6 +1,6 @@
-# forecast-research-loop
+# kepler
 
-Prototype harness for the M5 / Walmart forecasting research loop. See [SPEC.md](SPEC.md)
+Forecasting research loop prototype: a harness for the M5 / Walmart agent loop. See [SPEC.md](SPEC.md)
 for the full protocol. This README covers only local setup notes that the spec does not.
 
 ## Setup

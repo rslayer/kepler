@@ -26,12 +26,12 @@ anything under `~/.kaggle`.
 
 ### Tasks
 
-- Create a private GitHub repository named `forecast-research-loop` under the
-  authenticated user with `gh repo create forecast-research-loop --private --clone`.
+- Create a private GitHub repository named `kepler` under the
+  authenticated user with `gh repo create kepler --private --clone`.
 - Inside it, create the layout below. Commit as `chore: scaffold`.
 
 ```
-forecast-research-loop/
+kepler/
   SPEC.md                  (this file)
   CLAUDE.md                (researcher instructions, Phase 2)
   adversary/CLAUDE.md      (adversary instructions, Phase 3)
