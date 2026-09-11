@@ -3,7 +3,7 @@
     python -m src.data                 download + build snapshot + manifest
     python -m src.data --cut-holdout   HUMAN ONLY: move the final 28 days into holdout/
 
-This module never reads, prints, or moves ~/.kaggle/kaggle.json. The Kaggle CLI is
+This module never reads, prints, or moves anything under ~/.kaggle/. The Kaggle CLI is
 invoked as a subprocess and handles its own credentials.
 """
 
@@ -89,7 +89,7 @@ def download() -> None:
         raise SystemExit(
             "Kaggle download failed:\n  "
             + "\n  ".join(tail)
-            + "\n\nCheck that ~/.kaggle/kaggle.json exists with mode 600 and that the "
+            + "\n\nCheck that ~/.kaggle/access_token (or legacy kaggle.json) exists with mode 600 and that the "
             f"competition rules are accepted at\n  https://www.kaggle.com/competitions/{COMPETITION}/rules"
         )
     archive = RAW / f"{COMPETITION}.zip"

@@ -16,8 +16,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Only needed for `make data`. Reads ~/.kaggle/kaggle.json itself; no agent touches it.
-data = ["kaggle==1.6.17"]
+# Only needed for `make data`. Reads ~/.kaggle/access_token (or legacy kaggle.json) itself; no agent touches it.
+data = ["kaggle==2.2.4"]
 
 [tool.uv]
 package = false
