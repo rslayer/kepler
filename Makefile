@@ -21,6 +21,7 @@ help:
 	@echo "make report RUN=<run_id>     error breakdown for one run"
 	@echo "make score-holdout MODEL=<n> HUMAN ONLY: one shot against holdout/"
 	@echo "make verify-frozen           diff frozen files against tag v0-harness"
+	@echo "KEPLER_RUNS_DIR=<dir> make backtest ...   log to <dir> instead of runs/ (adversary reruns)"
 
 env:
 	$(UV) sync --extra data

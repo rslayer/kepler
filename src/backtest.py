@@ -20,6 +20,7 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -33,8 +34,11 @@ from .data import ROOT, load_snapshot
 from .features import HORIZON, Panel
 from .model import get_model
 
-RUNS_CSV = ROOT / "runs" / "runs.csv"
-DETAIL_DIR = ROOT / "runs" / "detail"
+# KEPLER_RUNS_DIR redirects the run log + detail output (used by the adversary to rerun a
+# branch's model without appending to the canonical, append-only runs/runs.csv).
+_RUNS_DIR = Path(os.environ["KEPLER_RUNS_DIR"]) if os.environ.get("KEPLER_RUNS_DIR") else ROOT / "runs"
+RUNS_CSV = _RUNS_DIR / "runs.csv"
+DETAIL_DIR = _RUNS_DIR / "detail"
 FINDINGS_DIR = ROOT / "findings"
 
 N_FOLDS = 4

@@ -56,3 +56,5 @@ Harness notes (how the rules above map onto this repo):
   docstring at the top of src/features.py before adding a feature. A feature may only
   read panel columns strictly before origin_pos.
 - Check frozen files are untouched at any time: make verify-frozen
+- If the human has told you that you are the ADVERSARY, adversary/CLAUDE.md is your
+  instruction file and overrides everything above. The researcher role does not apply.
