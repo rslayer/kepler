@@ -1,1 +1,4 @@
 run_id,timestamp,git_commit,model_name,config_hash,fold_count,wrmsse,wape,bias,wape_h1_7,wape_h8_14,wape_h15_28,seconds,status,findings_file,author
+r001,2026-09-11T04:15:53+00:00,dba04a7,seasonal_naive,775d65943d87,4,1.016667,0.773969,-0.048187,0.722774,0.776853,0.799200,1.3,ok,findings/r001.md,human
+r002,2026-09-11T04:16:19+00:00,dba04a7-dirty,lgbm_baseline,7e7076451979,4,0.782956,0.659394,-0.012295,0.621475,0.651612,0.683234,18.4,ok,findings/r002.md,human
+r003,2026-09-11T04:16:38+00:00,dba04a7-dirty,lgbm_baseline,7e7076451979,4,0.782956,0.659394,-0.012295,0.621475,0.651612,0.683234,17.9,ok,findings/r003.md,human
