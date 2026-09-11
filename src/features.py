@@ -111,6 +111,16 @@ class Panel:
             ["item_id", "wm_yr_wk"]
         )
 
+    @property
+    def price_matrix(self) -> np.ndarray:
+        """(series x date) sell price, 0 where the item had no listed price that week."""
+        if not hasattr(self, "_price_matrix"):
+            wk = self.calendar.loc[self.dates, "wm_yr_wk"].to_numpy()
+            wide = self.prices.pivot(index="item_id", columns="wm_yr_wk", values="sell_price")
+            wide = wide.reindex(index=self.item_id, columns=wk)
+            self._price_matrix = np.nan_to_num(wide.to_numpy(dtype=np.float32), nan=0.0)
+        return self._price_matrix
+
     def pos(self, date: pd.Timestamp) -> int:
         try:
             return self._pos[pd.Timestamp(date)]
@@ -152,6 +162,21 @@ def asof_features(panel: Panel, origin_pos: int) -> dict[str, np.ndarray]:
     last_idx = np.where(nz.any(axis=1), origin_pos - 1 - np.argmax(nz[:, ::-1], axis=1), -1)
     dss = np.where(last_idx >= 0, origin_pos - last_idx, 365).astype(np.float32)
     out["days_since_sale"] = np.minimum(dss, 365)
+    # Mask column (not a model feature): has the series sold anything before the origin?
+    out["ever_sold"] = nz.any(axis=1).astype(np.int8)
+    # Aux columns (not model features) for metric-aligned training weights, both from
+    # data strictly before the origin, mirroring the scorer's definitions:
+    #   aux_scale    mean squared first difference from the first non-zero day to origin-1
+    #   aux_wdollar  dollar sales over the 28 days before the origin, normalised to sum 1
+    first_nz = np.where(nz.any(axis=1), np.argmax(nz, axis=1), origin_pos)
+    active = np.arange(origin_pos)[None, :] >= first_nz[:, None]
+    d2 = np.diff(hist, axis=1) ** 2
+    pair_mask = active[:, 1:]
+    cnt = pair_mask.sum(axis=1)
+    scale = np.where(cnt > 0, (d2 * pair_mask).sum(axis=1) / np.maximum(cnt, 1), np.nan)
+    out["aux_scale"] = np.where(scale > 0, scale, np.nan).astype(np.float32)
+    dollars = (hist[:, -28:] * panel.price_matrix[:, origin_pos - 28 : origin_pos]).sum(axis=1)
+    out["aux_wdollar"] = (dollars / max(dollars.sum(), 1e-9)).astype(np.float32)
     return out
 
 
