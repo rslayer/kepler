@@ -77,12 +77,13 @@ class LGBMBaseline:
     }
     N_TRAIN_ORIGINS = 40
     TRAIN_ORIGIN_SPACING = 7
+    FEATURES = list(FEATURE_COLUMNS)
 
     def config(self) -> dict:
         return {
             "kind": "lgbm",
             "params": dict(self.PARAMS),
-            "features": list(FEATURE_COLUMNS),
+            "features": list(self.FEATURES),
             "n_train_origins": self.N_TRAIN_ORIGINS,
             "train_origin_spacing": self.TRAIN_ORIGIN_SPACING,
         }
@@ -94,8 +95,8 @@ class LGBMBaseline:
         params.update(random_state=seed, seed=seed, bagging_seed=seed, feature_fraction_seed=seed)
         model = lgb.LGBMRegressor(**params)
 
-        x_train = train[FEATURE_COLUMNS]
-        x_pred = predict[FEATURE_COLUMNS].copy()
+        x_train = train[self.FEATURES]
+        x_pred = predict[self.FEATURES].copy()
         # Align categorical dictionaries so LightGBM sees identical codes in both frames.
         for col in CATEGORICAL_COLUMNS:
             categories = x_train[col].cat.categories
@@ -121,9 +122,17 @@ class LGBMBaseline:
         return out
 
 
+class LGBMLocalSmooth(LGBMBaseline):
+    """lgbm_baseline plus a local 7-day smoothed level around the target date."""
+
+    name = "lgbm_local_smooth"
+    FEATURES = LGBMBaseline.FEATURES + ["local_smooth_7"]
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
+    LGBMLocalSmooth.name: LGBMLocalSmooth,
 }
 
 
