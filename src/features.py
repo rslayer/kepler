@@ -135,6 +135,16 @@ def build_frame(
     frame = frame.merge(panel.prices, on=["item_id", "wm_yr_wk"], how="left")
     frame = frame.drop(columns=["wm_yr_wk"])
 
+    # Local 7-day smoothing around the target date. Denoises the day-level baseline so
+    # the model regresses toward a stable local level rather than a single noisy day.
+    n_days = panel.values.shape[1]
+    smooth = np.zeros((n_series, horizon), dtype=np.float32)
+    for h in range(horizon):
+        tp = origin_pos + h
+        lo, hi = max(tp - 3, 0), min(tp + 4, n_days)
+        smooth[:, h] = panel.values[:, lo:hi].mean(axis=1)
+    frame["local_smooth_7"] = smooth.reshape(-1)
+
     if with_target:
         end_pos = origin_pos + horizon
         if end_pos > panel.values.shape[1]:
