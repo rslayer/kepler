@@ -16,12 +16,15 @@ import pandas as pd
 
 from .features import (
     CATEGORICAL_COLUMNS,
+    EXTRA_CATEGORICAL_COLUMNS,
     FEATURE_COLUMNS,
     HORIZON,
     Panel,
     build_frame,
     build_training_set,
 )
+
+ALL_CATEGORICAL = CATEGORICAL_COLUMNS + EXTRA_CATEGORICAL_COLUMNS
 
 
 class SeasonalNaive:
@@ -77,12 +80,15 @@ class LGBMBaseline:
     }
     N_TRAIN_ORIGINS = 40
     TRAIN_ORIGIN_SPACING = 7
+    # Subclasses (experiments) override FEATURES / PARAMS / origin settings. The baseline
+    # keeps FEATURE_COLUMNS verbatim so its config hash and metrics do not move.
+    FEATURES = list(FEATURE_COLUMNS)
 
     def config(self) -> dict:
         return {
             "kind": "lgbm",
             "params": dict(self.PARAMS),
-            "features": list(FEATURE_COLUMNS),
+            "features": list(self.FEATURES),
             "n_train_origins": self.N_TRAIN_ORIGINS,
             "train_origin_spacing": self.TRAIN_ORIGIN_SPACING,
         }
@@ -94,15 +100,24 @@ class LGBMBaseline:
         params.update(random_state=seed, seed=seed, bagging_seed=seed, feature_fraction_seed=seed)
         model = lgb.LGBMRegressor(**params)
 
-        x_train = train[FEATURE_COLUMNS]
-        x_pred = predict[FEATURE_COLUMNS].copy()
+        features = list(self.FEATURES)
+        categorical = [c for c in features if c in ALL_CATEGORICAL]
+        x_train = train[features]
+        x_pred = predict[features].copy()
         # Align categorical dictionaries so LightGBM sees identical codes in both frames.
-        for col in CATEGORICAL_COLUMNS:
+        for col in categorical:
             categories = x_train[col].cat.categories
             x_pred[col] = pd.Categorical(x_pred[col], categories=categories)
 
-        model.fit(x_train, train["y"], categorical_feature=CATEGORICAL_COLUMNS)
-        return model.predict(x_pred)
+        model.fit(x_train, self.transform_target(train["y"]), categorical_feature=categorical)
+        return self.inverse_transform(model.predict(x_pred))
+
+    # Target transform hooks (identity for the baseline).
+    def transform_target(self, y: pd.Series) -> pd.Series:
+        return y
+
+    def inverse_transform(self, pred: np.ndarray) -> np.ndarray:
+        return pred
 
     def forecast(
         self, panel: Panel, origin: pd.Timestamp, horizon: int = HORIZON, seed: int = 42
@@ -121,9 +136,21 @@ class LGBMBaseline:
         return out
 
 
+# ----------------------------------------------------------------------- experiments
+# One class per experiment; each changes exactly one thing relative to its parent.
+
+
+class LGBMShortLags(LGBMBaseline):
+    """r010: + lag_1, lag_2, lag_3 at the origin (current state: stockouts, surges)."""
+
+    name = "lgbm_shortlags"
+    FEATURES = LGBMBaseline.FEATURES + ["lag_1", "lag_2", "lag_3"]
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
+    LGBMShortLags.name: LGBMShortLags,
 }
 
 
