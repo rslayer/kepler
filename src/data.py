@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import shutil
 import subprocess
 import sys
 import zipfile
@@ -76,11 +75,20 @@ def download() -> None:
     if (RAW / "sales_train_validation.csv").exists():
         print(f"raw files already present in {RAW}, skipping download")
         return
-    if shutil.which("kaggle") is None:
-        raise SystemExit("kaggle CLI not found. Run `make env` (installs the `data` extra).")
+    try:
+        import kaggle, truststore  # noqa: F401  (presence check only)
+    except ImportError:
+        raise SystemExit("kaggle/truststore not installed. Run `make env` (installs the `data` extra).")
     print(f"downloading {COMPETITION} to {RAW} ...")
+    # The Kaggle CLI is run in-process via the interpreter, with `truststore` injected
+    # first so Python trusts the OS keychain. This machine sits behind TLS interception
+    # (Zscaler); without it every HTTPS call fails CERTIFICATE_VERIFY_FAILED.
+    shim = (
+        "import sys, truststore; truststore.inject_into_ssl(); "
+        "from kaggle.cli import main; sys.argv = ['kaggle'] + sys.argv[1:]; main()"
+    )
     result = subprocess.run(
-        ["kaggle", "competitions", "download", "-c", COMPETITION, "-p", str(RAW)],
+        [sys.executable, "-c", shim, "competitions", "download", "-c", COMPETITION, "-p", str(RAW)],
         capture_output=True,
         text=True,
     )
