@@ -1,0 +1,2 @@
+timestamp,git_commit,model_name,config_hash,wrmsse,wape,bias,wape_h1_7,wape_h8_14,wape_h15_28,seconds
+2026-09-11T23:00:56+00:00,4424c30,lgbm_baseline,9bbdad874d23,0.762011,0.608014,-0.009995,0.578918,0.596531,0.628879,6.3
