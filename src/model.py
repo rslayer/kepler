@@ -91,6 +91,9 @@ class LGBMBaseline:
             "features": list(self.FEATURES),
             "n_train_origins": self.N_TRAIN_ORIGINS,
             "train_origin_spacing": self.TRAIN_ORIGIN_SPACING,
+            **({"drop_prelaunch": True} if self.DROP_PRELAUNCH else {}),
+            **({"recency_half_life_days": self.RECENCY_HALF_LIFE_DAYS} if self.RECENCY_HALF_LIFE_DAYS else {}),
+            **({"metric_weights": True} if self.METRIC_WEIGHTS else {}),
         }
 
     def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
@@ -109,8 +112,39 @@ class LGBMBaseline:
             categories = x_train[col].cat.categories
             x_pred[col] = pd.Categorical(x_pred[col], categories=categories)
 
-        model.fit(x_train, self.transform_target(train["y"]), categorical_feature=categorical)
+        model.fit(
+            x_train,
+            self.transform_target(train["y"]),
+            sample_weight=self.sample_weight(train),
+            categorical_feature=categorical,
+        )
         return self.inverse_transform(model.predict(x_pred))
+
+    # Training-set hooks (no-ops for the baseline).
+    DROP_PRELAUNCH = False   # drop rows of series with no sale before their training origin
+    RECENCY_HALF_LIFE_DAYS: float | None = None  # weight = 0.5 ** (origin age / half life)
+
+    def filter_training(self, train: pd.DataFrame, fold_origin: pd.Timestamp) -> pd.DataFrame:
+        if self.DROP_PRELAUNCH:
+            train = train[train["ever_sold"] == 1].reset_index(drop=True)
+        return train
+
+    METRIC_WEIGHTS = False  # weight rows by dollar weight / scale, as WRMSSE does per series
+
+    def sample_weight(self, train: pd.DataFrame):
+        w = np.ones(len(train), dtype=float)
+        used = False
+        if self.RECENCY_HALF_LIFE_DAYS is not None:
+            origin = train["date"] - pd.to_timedelta(train["horizon"].astype(int) - 1, unit="D")
+            age_days = (self._fold_origin - origin).dt.days.to_numpy(dtype=float)
+            w *= np.power(0.5, age_days / self.RECENCY_HALF_LIFE_DAYS)
+            used = True
+        if self.METRIC_WEIGHTS:
+            mw = train["aux_wdollar"].to_numpy(dtype=float) / train["aux_scale"].to_numpy(dtype=float)
+            mw = np.nan_to_num(mw, nan=0.0, posinf=0.0)
+            w *= mw / max(mw.mean(), 1e-12)
+            used = True
+        return w if used else None
 
     # Target transform hooks (identity for the baseline).
     def transform_target(self, y: pd.Series) -> pd.Series:
@@ -129,6 +163,8 @@ class LGBMBaseline:
             spacing_days=self.TRAIN_ORIGIN_SPACING,
             horizon=horizon,
         )
+        self._fold_origin = pd.Timestamp(origin)
+        train = self.filter_training(train, self._fold_origin)
         predict = build_frame(panel, origin, horizon, with_target=False)
         preds = self._fit_predict(train, predict, seed)
         out = predict[["id", "date"]].copy()
@@ -141,16 +177,92 @@ class LGBMBaseline:
 
 
 class LGBMShortLags(LGBMBaseline):
-    """r010: + lag_1, lag_2, lag_3 at the origin (current state: stockouts, surges)."""
+    """r010 (kept): + lag_1, lag_2, lag_3 at the origin (current state: stockouts, surges)."""
 
     name = "lgbm_shortlags"
     FEATURES = LGBMBaseline.FEATURES + ["lag_1", "lag_2", "lag_3"]
+
+
+class LGBMShortLagsOrigins80(LGBMShortLags):
+    """r011: r010 with 80 training origins."""
+
+    name = "lgbm_shortlags_o80"
+    N_TRAIN_ORIGINS = 80
+
+
+class LGBMShortLagsTweedie(LGBMShortLags):
+    """r017 (discarded alone, ensemble member): r010 with Tweedie objective, power 1.2."""
+
+    name = "lgbm_sl_tweedie"
+    PARAMS = {**LGBMShortLags.PARAMS, "objective": "tweedie", "tweedie_variance_power": 1.2}
+
+
+class LGBMShortLagsMCS200(LGBMShortLags):
+    """r018 (investigate, ensemble member): r010 with min_child_samples 200."""
+
+    name = "lgbm_sl_mcs200"
+    PARAMS = {**LGBMShortLags.PARAMS, "min_child_samples": 200}
+
+
+class Ensemble:
+    """Equal-weight average of member models' forecasts. Members are full models fit
+    independently under the same contract, so the average is leak-free if they are."""
+
+    name = "ensemble"
+    MEMBERS: tuple[type, ...] = ()
+    WEIGHTS: tuple[float, ...] | None = None  # None = equal weights
+
+    def _weights(self) -> np.ndarray:
+        w = np.ones(len(self.MEMBERS)) if self.WEIGHTS is None else np.asarray(self.WEIGHTS, dtype=float)
+        return w / w.sum()
+
+    def config(self) -> dict:
+        return {
+            "kind": "ensemble",
+            "members": [m().config() | {"name": m.name} for m in self.MEMBERS],
+            "weights": self._weights().round(4).tolist(),
+        }
+
+    def forecast(self, panel: Panel, origin: pd.Timestamp, horizon: int = HORIZON, seed: int = 42) -> pd.DataFrame:
+        outs = [m().forecast(panel, origin, horizon, seed) for m in self.MEMBERS]
+        base = outs[0][["id", "date"]].copy()
+        stack = np.column_stack([o["forecast"].to_numpy(dtype=float) for o in outs])
+        base["forecast"] = stack @ self._weights()
+        return base
+
+
+class EnsembleL2Tweedie(Ensemble):
+    """r021: average of r010 (L2) and r017 (Tweedie) forecasts."""
+
+    name = "ens_l2_tweedie"
+    MEMBERS = (LGBMShortLags, LGBMShortLagsTweedie)
+
+
+class EnsembleMCS200Tweedie(Ensemble):
+    """r022: r021 with the L2 member swapped for the regularised r018 (min_child_samples 200)."""
+
+    name = "ens_mcs200_tweedie"
+    MEMBERS = (LGBMShortLagsMCS200, LGBMShortLagsTweedie)
+
+
+class EnsembleL2Tweedie73(Ensemble):
+    """r023: r021 with weights 0.7 (L2) / 0.3 (Tweedie) instead of equal."""
+
+    name = "ens_l2_tweedie_73"
+    MEMBERS = (LGBMShortLags, LGBMShortLagsTweedie)
+    WEIGHTS = (0.7, 0.3)
 
 
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
     LGBMShortLags.name: LGBMShortLags,
+    LGBMShortLagsOrigins80.name: LGBMShortLagsOrigins80,
+    LGBMShortLagsTweedie.name: LGBMShortLagsTweedie,
+    LGBMShortLagsMCS200.name: LGBMShortLagsMCS200,
+    EnsembleL2Tweedie.name: EnsembleL2Tweedie,
+    EnsembleMCS200Tweedie.name: EnsembleMCS200Tweedie,
+    EnsembleL2Tweedie73.name: EnsembleL2Tweedie73,
 }
 
 
