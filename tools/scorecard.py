@@ -11,11 +11,11 @@ Definitions
 - kept: verdict=kept. v0 rows predate the verdict column; for them the findings file's
   own "Verdict: keep" line plus an existing exp/<run_id> branch is used, and rows with an
   empty session are assigned to the v0 session id below.
-- repeat: the run's hypothesis_id (from runs.csv, or for v0 rows from the ledger's
-  first_run/last_run) belongs to a ledger row whose `sessions` list contains a session
-  that sorts before this one, i.e. the hypothesis had already been tried when this
-  session started. Status is not consulted: a repeat of an `inconclusive` row is allowed
-  by CLAUDE.md, so only rows whose current status is discarded or kept count.
+- repeat: the run's hypothesis_id had status `discarded` or `kept` in the ledger AS OF
+  THE START OF THE SESSION, which CLAUDE.md forbids re-running. The start-of-session
+  ledger is read from git: the last commit on main before the session's first logged
+  timestamp. Re-running an `inconclusive` row is allowed and never counts, even if the
+  session then changes its status. Sessions that predate the ledger have 0 repeats.
 - wall_minutes: last logged timestamp minus first, within the session (log span).
 """
 
@@ -73,20 +73,30 @@ def compute() -> pd.DataFrame:
     res["kept_flag"] = [
         v == "kept" or (v == "" and v0_kept(r)) for v, r in zip(res["verdict"], res["run_id"])
     ]
-    led_sessions = {r["hypothesis_id"]: [s for s in r["sessions"].split(";") if s] for _, r in ledger.iterrows()}
-    led_status = dict(zip(ledger["hypothesis_id"], ledger["status"]))
+    def ledger_status_at(first_ts: pd.Timestamp) -> dict[str, str]:
+        """Ledger status per hypothesis as committed on main just before `first_ts`."""
+        if pd.isna(first_ts):
+            return {}
+        before = first_ts.strftime("%Y-%m-%dT%H:%M:%S%z")
+        sha = subprocess.run(["git", "rev-list", "-1", f"--before={before}", "main"],
+                             cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        if not sha:
+            return {}
+        shown = subprocess.run(["git", "show", f"{sha}:hypotheses/ledger.csv"],
+                               cwd=ROOT, capture_output=True, text=True)
+        if shown.returncode != 0:
+            return {}  # ledger did not exist yet
+        import io
+        old = pd.read_csv(io.StringIO(shown.stdout), dtype=str).fillna("")
+        return dict(zip(old["hypothesis_id"], old["status"]))
 
     rows = []
     for session, g in res.groupby("session", sort=True):
         ok = g[g["status"] == "ok"]
         n = len(ok)
         kept = int(ok["kept_flag"].sum())
-        repeats = 0
-        for h in ok["hyp"]:
-            if not h or led_status.get(h) not in ("discarded", "kept"):
-                continue
-            if any(s < session for s in led_sessions.get(h, [])):
-                repeats += 1
+        status_at_start = ledger_status_at(g["ts"].min())
+        repeats = sum(1 for h in ok["hyp"] if h and status_at_start.get(h) in ("discarded", "kept"))
         wall = (g["ts"].max() - g["ts"].min()).total_seconds() / 60 if g["ts"].notna().any() else float("nan")
         best = pd.to_numeric(ok["wrmsse"], errors="coerce").min()
         rows.append({
