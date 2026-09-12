@@ -1,5 +1,31 @@
 # Harness changelog
 
+## v2 — 2026-09-12 (tag `v2-loop`, SPEC_v2_selfimprove.md)
+
+v1 fixed the keep rule but left the researcher amnesiac: each session started from the same
+CLAUDE.md, and the only cross-session memory was findings files nobody re-reads. v2 makes the
+loop learn without a human rewriting instructions. Memory: `LESSONS.md` (one line per
+confirmed finding, 13 seeded from the v0 session) and `hypotheses/ledger.csv` (30 rows:
+every v0 hypothesis with its status, plus untried next steps); the researcher reads both
+first, may only pick `untried` or `inconclusive` rows, and appends confirmed findings last.
+`runs.csv` gained `session` and `hypothesis_id` (backfilled empty; `tools/migrate_runs.py`
+now handles v0/v1/v2 layouts) and the harness refuses a researcher run without both.
+`CLAUDE.md` is split by two marker lines into a human-owned Rules block and a
+curator-editable Priors block (5 seeded prior lines); `tools/check_claude_diff.py` enforces
+the boundary and is part of `make verify-frozen`. A curator role (`curator/CLAUDE.md`)
+turns a session's findings and reviews into lesson lines, ledger updates, and a Priors
+rewrite on a `curator/<session>` branch. The adversary's harness notes were rewritten for
+v1 (`SEEDS=`, logged spreads, `PARENT`, the keep_rule block as evidence, a merge-base rule
+that treats pre-v1 `exp/*` branches as historical) and it gained checklist item 9,
+instruction leakage, for curator branches. `tools/merge_gate.py` fast-forwards a curator
+branch into main only when the diff scope, an adversary PASS, evidence citations, and the
+scorecard trend all hold, replacing the human approval. `tools/scorecard.py` writes
+`LOOP_SCORECARD.md` (keep rate, runs per kept, repeat rate per session); v0 scores 25 runs,
+2 kept, 0 repeats. One frozen-file defect worked around: `report.py` reads
+`detail["seed"]`, which v1 detail files lacked; `backtest.py` now writes it as the joined
+seed list and the v1 detail files were backfilled. Human gates that remain: holdout,
+edits above the RULES marker, and a weekly read of the scorecard and merged curator diffs.
+
 ## v1 — 2026-09-12 (tag `v1-harness`, SPEC_v1_harness.md)
 
 v0 could not tell a real gain from seed noise: on the FOODS_3 subset the best honest

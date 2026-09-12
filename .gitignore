@@ -21,3 +21,5 @@ __pycache__/
 adversary/reruns/
 runs/runs.v0.bak
 runs/runs.partc.bak
+runs/runs.v1.bak
+runs/runs.v1-partc.bak

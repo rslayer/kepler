@@ -1,6 +1,7 @@
 {
   "run_id": "r034",
   "model_name": "lgbm_baseline",
+  "seed": "42,7,123",
   "seed_list": [
     42,
     7,

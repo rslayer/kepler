@@ -1,6 +1,7 @@
 {
   "run_id": "r036",
   "model_name": "seasonal_naive",
+  "seed": "42,7,123",
   "seed_list": [
     42,
     7,

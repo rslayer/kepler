@@ -8,6 +8,11 @@
 # any change to make_folds() / the fold loop requires human review.
 /src/backtest.py  @rslayer
 
+# CLAUDE.md: the human gate applies to the Rules block (above the RULES marker).
+# Priors-block edits arrive on curator/* branches and are gated by the adversary's item 9
+# and tools/merge_gate.py instead (SPEC_v2 Parts D and E).
+/CLAUDE.md        @rslayer
+
 # Harness contracts
 /Makefile         @rslayer
 /SPEC.md          @rslayer
