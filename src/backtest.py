@@ -52,7 +52,7 @@ RUN_COLUMNS = [
     "wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28",
     "wrmsse_spread", "wape_spread", "bias_spread",
     "wape_h1_7_spread", "wape_h8_14_spread", "wape_h15_28_spread",
-    "seconds", "status", "findings_file", "author", "verdict",
+    "seconds", "status", "findings_file", "author", "verdict", "session", "hypothesis_id",
 ]
 METRIC_KEYS = ["wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28"]
 
@@ -195,6 +195,8 @@ def run_backtest(
     author: str = "human",
     n_folds: int = N_FOLDS,
     parent_id: str | None = None,
+    session: str = "",
+    hypothesis_id: str = "",
 ) -> dict:
     parent = load_parent(parent_id) if parent_id else None  # fail fast, before any fit
     sales, calendar, prices = load_snapshot()
@@ -278,6 +280,8 @@ def run_backtest(
         "status": status,
         "findings_file": f"findings/{run_id}.md",
         "author": author,
+        "session": session,
+        "hypothesis_id": hypothesis_id,
     }
     seed_aggregates = {}
     if status == "ok":
@@ -310,6 +314,7 @@ def run_backtest(
             {
                 "run_id": run_id,
                 "model_name": model_name,
+                "seed": ",".join(map(str, seeds)),  # frozen report.py prints detail["seed"]
                 "seed_list": list(seeds),
                 "fold_spacing": FOLD_SPACING,
                 "author": author,
@@ -354,12 +359,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--author", default="human", choices=["human", "researcher", "adversary"])
     parser.add_argument("--folds", type=int, default=N_FOLDS)
     parser.add_argument("--parent", default=None, help="run_id to evaluate the keep rule against")
+    parser.add_argument("--session", default="", help="<role>-<YYYYMMDD>-<n>; required for researcher runs")
+    parser.add_argument("--hypothesis", default="", help="H### from hypotheses/ledger.csv; required for researcher runs")
     args = parser.parse_args(argv)
+    if args.author == "researcher" and not (args.session and args.hypothesis):
+        raise SystemExit(
+            "researcher runs must name SESSION=<role>-<YYYYMMDD>-<n> and HYPOTHESIS=<H### from "
+            "hypotheses/ledger.csv>; both are logged to runs/runs.csv"
+        )
     try:
         seeds = tuple(int(x) for x in args.seeds.split(",") if x.strip())
         if not seeds:
             raise SystemExit("--seeds must name at least one seed")
-        run_backtest(args.model, seeds, args.author, args.folds, args.parent or None)
+        run_backtest(args.model, seeds, args.author, args.folds, args.parent or None,
+                     args.session, args.hypothesis)
     except SystemExit:
         raise
     except Exception as exc:  # log the failure rather than losing it
@@ -378,6 +391,8 @@ def main(argv: list[str] | None = None) -> int:
                 "findings_file": f"findings/{run_id}.md",
                 "author": args.author,
                 "verdict": "discarded" if args.parent else "no_parent",
+                "session": args.session,
+                "hypothesis_id": args.hypothesis,
             }
         )
         print(f"run failed, logged {run_id} with status=error: {type(exc).__name__}: {exc}", file=sys.stderr)

@@ -1,0 +1,31 @@
+hypothesis_id,status,summary,first_run,last_run,sessions,evidence
+H001,kept,Refactor LGBMBaseline for subclassing (FEATURES list; hooks); baseline unchanged,r004,r004,researcher-20260911-1,Identical to r002 to six decimals
+H002,discarded,Same-weekday mean over 4 weeks before origin (dow_mean_4w),r005,r014,researcher-20260911-1,Mixed folds on two bases; helps fold 2 only
+H003,discarded,Long as-of-origin rolling windows 56/91/182,r006,r006,researcher-20260911-1,Worse on all folds; stale levels at long horizons
+H004,discarded,Tweedie objective (power 1.2) standalone,r007,r017,researcher-20260911-1,WAPE better; WRMSSE mixed; bias -0.04 to -0.05
+H005,inconclusive,80 training origins (~560 days) instead of 40,r008,r024,researcher-20260911-1,Fold 1 -0.03 to -0.04 in four runs; fold 3 +0.002 to +0.009 every time
+H006,discarded,60 training origins,r009,r009,researcher-20260911-1,Dominated by 80 origins; fold 3/4 loss not monotone in history length
+H007,inconclusive,Short lags 1-3 at origin as series state,r010,r010,researcher-20260911-1,All folds better at seed 42; adversary: 72% of gain in one series; reverses at other seeds
+H008,discarded,Drop pre-launch all-zero training rows under 80 origins,r012,r012,researcher-20260911-1,Worse than r011 on every fold
+H009,inconclusive,Recency weighting (half-life 365d) on 80 origins,r013,r013,researcher-20260911-1,Fold 4 recovered; fold 3 +0.005
+H010,discarded,Price-ratio features (price_ratio_origin; price_rel_max),r015,r015,researcher-20260911-1,WAPE better; fold 1 worse; WRMSSE mixed
+H011,discarded,Metric-aligned sample weights (dollar/scale; untempered),r016,r016,researcher-20260911-1,Heavy tails; 13% zero-weight rows; folds 3-4 worse
+H012,inconclusive,min_child_samples 200,r018,r018,researcher-20260911-1,-0.0048 aggregate; fold 3 +0.0005
+H013,discarded,Remove month feature,r019,r019,researcher-20260911-1,+0.014 on December fold
+H014,inconclusive,num_leaves 31,r020,r020,researcher-20260911-1,-0.0056 aggregate; fold 3 +0.0038
+H015,inconclusive,Equal-weight ensemble of L2 and Tweedie,r021,r021,researcher-20260911-1,Helps folds 1 and 3; hurts 2 and 4; bias pull from Tweedie
+H016,inconclusive,Ensemble of mcs200 L2 member and Tweedie member,r022,r022,researcher-20260911-1,All folds better vs r010 at seed 42; adversary: gain 0.0005 at seed 7; fold 4 reverses
+H017,discarded,L2-heavy 0.7/0.3 blend of L2 and Tweedie,r023,r023,researcher-20260911-1,Beats r010 on all folds but dominated by r022 everywhere
+H018,discarded,Three-member ensemble (mcs200; leaves31; Tweedie),r025,r025,researcher-20260911-1,Dilutes Tweedie share; fold 3 gives back gain
+H019,discarded,Intermittency state features (zero_frac_28; days_since_sale; roll_std_28),r026,r026,researcher-20260911-1,WAPE h15-28 better; WRMSSE mixed
+H020,discarded,Tweedie member 600 rounds,r027,r027,researcher-20260911-1,Bias worsened -0.040 to -0.053
+H021,discarded,Tweedie variance power 1.1,r028,r028,researcher-20260911-1,Bias unchanged; fold 3 worse
+H022,untried,Wider origin spacing (14d) on the 80-origin set inside the r022 ensemble,,,,Named as next in r011/r013 and the v0 session report
+H023,untried,Shorter recency half-life (90-180d) on 80 origins inside the r022 ensemble,,,,r013 used 365d; fold 3 still lost
+H024,untried,Tempered metric weights (sqrt of dollar/scale; clipped),,,,r016 verdict names it
+H025,untried,Tweedie weight below 0.3 with the mcs200 L2 member,,,,r023 tested 0.3 with the weaker L2 member only
+H026,untried,Identify and exclude the training periods that harm fold 3 under 80 origins (not pre-launch rows),,,,r009/r013 diagnostics: loss depends on which periods enter training
+H027,untried,Level-growth correction for the Tweedie member (train-to-forecast level ratio feature or multiplicative calibration),,,,r028 diagnostic: bias is level growth not calibration
+H028,untried,Year-ago features (lag_364; yoy_roll_7) already built in features.py but never consumed,,,,Built in r004; no run used them
+H029,untried,Calendar detail (event_name categorical; christmas; day_of_month; week_of_year) already built but never consumed,,,,Built in r004; no run used them
+H030,untried,Per-department or per-category models instead of one model over all 3049 series (v1 subset only),,,,New in v1: seven departments share one model
