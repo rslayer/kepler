@@ -29,3 +29,4 @@ H027,untried,Level-growth correction for the Tweedie member (train-to-forecast l
 H028,untried,Year-ago features (lag_364; yoy_roll_7) already built in features.py but never consumed,,,,Built in r004; no run used them
 H029,untried,Calendar detail (event_name categorical; christmas; day_of_month; week_of_year) already built but never consumed,,,,Built in r004; no run used them
 H030,untried,Per-department or per-category models instead of one model over all 3049 series (v1 subset only),,,,New in v1: seven departments share one model
+H031,kept,Store-closed override: forecast 0 on Christmas Day (sales 0 every 25 Dec in snapshot; 40-origin training never sees one),r037,r037,researcher-20260912-1,verdict=kept vs r033: -0.0054 WRMSSE; folds 2/3 -0.022/-0.021; other folds identical; bias +0.0087 to +0.0007
