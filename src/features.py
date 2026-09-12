@@ -71,7 +71,12 @@ class Panel:
             cal["event_name_1"].notna() | cal["event_name_2"].notna()
         ).astype("int8")
         cal["snap_CA"] = cal["snap_CA"].astype("int8")
-        self.calendar = cal.set_index("date")[["dow", "month", "snap_CA", "event_flag", "wm_yr_wk"]]
+        # Researcher additions (calendar-known, horizon-varying; leak-free by construction).
+        # The store is closed on Christmas: sales are 0 on every 25 December in the snapshot.
+        cal["christmas"] = (cal["event_name_1"] == "Christmas").astype("int8")
+        self.calendar = cal.set_index("date")[
+            ["dow", "month", "snap_CA", "event_flag", "wm_yr_wk", "christmas"]
+        ]
         self.prices = prices[["item_id", "wm_yr_wk", "sell_price"]].drop_duplicates(
             ["item_id", "wm_yr_wk"]
         )
