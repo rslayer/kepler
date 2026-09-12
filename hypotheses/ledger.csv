@@ -3,17 +3,17 @@ H001,kept,Refactor LGBMBaseline for subclassing (FEATURES list; hooks); baseline
 H002,discarded,Same-weekday mean over 4 weeks before origin (dow_mean_4w),r005,r014,researcher-20260911-1,Mixed folds on two bases; helps fold 2 only
 H003,discarded,Long as-of-origin rolling windows 56/91/182,r006,r006,researcher-20260911-1,Worse on all folds; stale levels at long horizons
 H004,discarded,Tweedie objective (power 1.2) standalone,r007,r017,researcher-20260911-1,WAPE better; WRMSSE mixed; bias -0.04 to -0.05
-H005,inconclusive,80 training origins (~560 days) instead of 40,r008,r024,researcher-20260911-1,Fold 1 -0.03 to -0.04 in four runs; fold 3 +0.002 to +0.009 every time
+H005,discarded,80 training origins (~560 days) instead of 40,r008,r038,researcher-20260911-1;researcher-20260912-1,v1 r038 vs r037: -0.0035 aggregate but below threshold (child spread 0.0019); folds 1-5 gain up to -0.017; folds 6-8 (Feb origins) lose +0.002 to +0.004; verdict=discarded
 H006,discarded,60 training origins,r009,r009,researcher-20260911-1,Dominated by 80 origins; fold 3/4 loss not monotone in history length
-H007,inconclusive,Short lags 1-3 at origin as series state,r010,r010,researcher-20260911-1,All folds better at seed 42; adversary: 72% of gain in one series; reverses at other seeds
+H007,discarded,Short lags 1-3 at origin as series state,r010,r043,researcher-20260911-1;researcher-20260912-1,v1 r043 vs r037: all 8 folds better (-0.001 to -0.005); gain +0.00241 vs threshold 0.00247 (child spread 0.0012); verdict=discarded by 0.00006
 H008,discarded,Drop pre-launch all-zero training rows under 80 origins,r012,r012,researcher-20260911-1,Worse than r011 on every fold
 H009,inconclusive,Recency weighting (half-life 365d) on 80 origins,r013,r013,researcher-20260911-1,Fold 4 recovered; fold 3 +0.005
 H010,discarded,Price-ratio features (price_ratio_origin; price_rel_max),r015,r015,researcher-20260911-1,WAPE better; fold 1 worse; WRMSSE mixed
 H011,discarded,Metric-aligned sample weights (dollar/scale; untempered),r016,r016,researcher-20260911-1,Heavy tails; 13% zero-weight rows; folds 3-4 worse
-H012,inconclusive,min_child_samples 200,r018,r018,researcher-20260911-1,-0.0048 aggregate; fold 3 +0.0005
+H012,discarded,min_child_samples 200,r018,r041,researcher-20260911-1;researcher-20260912-1,v1 r041 vs r037: gain -0.00003 (neutral); no fold regresses; v0 gain was single-seed noise
 H013,discarded,Remove month feature,r019,r019,researcher-20260911-1,+0.014 on December fold
-H014,inconclusive,num_leaves 31,r020,r020,researcher-20260911-1,-0.0056 aggregate; fold 3 +0.0038
-H015,inconclusive,Equal-weight ensemble of L2 and Tweedie,r021,r021,researcher-20260911-1,Helps folds 1 and 3; hurts 2 and 4; bias pull from Tweedie
+H014,discarded,num_leaves 31,r020,r051,researcher-20260911-1;researcher-20260912-1,v1 r051 vs r044: gain +0.0016 vs threshold 0.0019; folds 2/3 -0.004/-0.008; fold 5 +0.0017 over tolerance by 0.00005; verdict=discarded
+H015,discarded,Equal-weight ensemble of L2 and Tweedie,r021,r042,researcher-20260911-1;researcher-20260912-1,v1 r042 vs r037: gain -0.00015 (neutral); WAPE -0.008 in every bucket but bias -0.011; fold 3 +0.008 regress; folds 1 and 6-8 gain
 H016,inconclusive,Ensemble of mcs200 L2 member and Tweedie member,r022,r022,researcher-20260911-1,All folds better vs r010 at seed 42; adversary: gain 0.0005 at seed 7; fold 4 reverses
 H017,discarded,L2-heavy 0.7/0.3 blend of L2 and Tweedie,r023,r023,researcher-20260911-1,Beats r010 on all folds but dominated by r022 everywhere
 H018,discarded,Three-member ensemble (mcs200; leaves31; Tweedie),r025,r025,researcher-20260911-1,Dilutes Tweedie share; fold 3 gives back gain
@@ -22,10 +22,18 @@ H020,discarded,Tweedie member 600 rounds,r027,r027,researcher-20260911-1,Bias wo
 H021,discarded,Tweedie variance power 1.1,r028,r028,researcher-20260911-1,Bias unchanged; fold 3 worse
 H022,untried,Wider origin spacing (14d) on the 80-origin set inside the r022 ensemble,,,,Named as next in r011/r013 and the v0 session report
 H023,untried,Shorter recency half-life (90-180d) on 80 origins inside the r022 ensemble,,,,r013 used 365d; fold 3 still lost
-H024,untried,Tempered metric weights (sqrt of dollar/scale; clipped),,,,r016 verdict names it
+H024,discarded,Tempered metric weights (sqrt of dollar/scale; clipped),r045,r045,researcher-20260912-1,v1 r045 vs r044: gain +0.000003 (neutral); no fold regresses; bias -0.006; untempered (r016) hurt and tempered does nothing
 H025,untried,Tweedie weight below 0.3 with the mcs200 L2 member,,,,r023 tested 0.3 with the weaker L2 member only
 H026,untried,Identify and exclude the training periods that harm fold 3 under 80 origins (not pre-launch rows),,,,r009/r013 diagnostics: loss depends on which periods enter training
 H027,untried,Level-growth correction for the Tweedie member (train-to-forecast level ratio feature or multiplicative calibration),,,,r028 diagnostic: bias is level growth not calibration
-H028,untried,Year-ago features (lag_364; yoy_roll_7) already built in features.py but never consumed,,,,Built in r004; no run used them
+H028,discarded,Year-ago features (lag_364; yoy_roll_7) aligned to each horizon date,r039,r039,researcher-20260912-1,v1 r039 vs r037: -0.0028 aggregate (passes gain); folds 1-3 -0.012 to -0.014; folds 6-8 (Feb) +0.005 to +0.008 so no-fold-regress fails; verdict=discarded
 H029,untried,Calendar detail (event_name categorical; christmas; day_of_month; week_of_year) already built but never consumed,,,,Built in r004; no run used them
-H030,untried,Per-department or per-category models instead of one model over all 3049 series (v1 subset only),,,,New in v1: seven departments share one model
+H030,discarded,Per-department or per-category models instead of one model over all 3049 series (v1 subset only),r052,r052,researcher-20260912-1,v1 r052 vs r044: +0.0020 worse; 5/8 folds regress (fold 2 +0.0075); WAPE slightly better; pooled model with item_id categorical already separates departments
+H031,kept,Store-closed override: forecast 0 on Christmas Day (sales 0 every 25 Dec in snapshot; 40-origin training never sees one),r037,r037,researcher-20260912-1,verdict=kept vs r033: -0.0054 WRMSSE; folds 2/3 -0.022/-0.021; other folds identical; bias +0.0087 to +0.0007
+H032,discarded,Year-ago 7-day mean rescaled to current level (yoy_roll_7 x roll_mean_28(origin)/roll_mean_28(origin-364)),r040,r040,researcher-20260912-1,v1 r040 vs r037: +0.0023 worse; folds 1-4 gain less than r039; folds 6-8 lose +0.008 to +0.016; rescaling does not fix the Feb-fold loss
+H033,kept,Single smoothed series-state feature roll_mean_3 (mean of the 3 days before origin) instead of lags 1-3,r044,r044,researcher-20260912-1,verdict=kept vs r037: -0.0014 WRMSSE (threshold 0.0012); 6/8 folds better; folds 3/7 within tolerance; bias unchanged; spread 0.0006
+H035,discarded,day_of_month as a calendar-known horizon-varying feature (paycheck/SNAP cycle beyond the snap flag),r046,r046,researcher-20260912-1,v1 r046 vs r044: gain +0.00007 (neutral); no fold regresses; fold 4 bias -0.047
+H036,discarded,Historical event effect: store-level ratio of event-day sales to the surrounding +/-7-day mean averaged over prior years before the origin as a horizon-varying feature (1.0 on non-event days),r047,r047,researcher-20260912-1,v1 r047 vs r044: gain +0.0004 below threshold; fold 5 +0.0018 regress; fold 1 bias unchanged +0.055 so the Thanksgiving-week error is a level shift not the event day
+H037,discarded,Store-level year-ago seasonal shape: store total around each horizon date 364 days earlier / store total over the 28 days before the year-ago origin (horizon-varying; series-constant),r048,r048,researcher-20260912-1,v1 r048 vs r044: gain +0.00096 vs threshold 0.0016; 6/8 folds better none worse; no Feb loss unlike series-level yoy; fold 1 unchanged
+H038,discarded,Thanksgiving-weekend override: multiply the forecast on Thanksgiving Day and the 3 following days by the mean prior-year store-level ratio of that day to its same-weekday baseline (history strictly before the origin),r049,r049,researcher-20260912-1,v1 r049 vs r044: fold 1 -0.0052 and fold-1 bias +0.054 to +0.012; other folds identical; gain +0.00065 vs threshold 0.00134; verdict=discarded
+H039,discarded,Thanksgiving-weekend override with department-level prior-year ratios (same mechanism as H038; ratio per department per day),r050,r050,researcher-20260912-1,v1 r050 vs r044: fold 1 -0.0061; other folds identical; gain +0.00076 vs threshold 0.00132; a one-week fix on one fold cannot clear a threshold set by seed spread on the other seven
