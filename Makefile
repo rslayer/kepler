@@ -7,7 +7,8 @@ PY := UV_SYSTEM_CERTS=1 uv run --
 
 MODEL ?=
 RUN ?=
-SEED ?= 42
+SEEDS ?= 42,7,123
+PARENT ?=
 AUTHOR ?= human
 
 .PHONY: help env data holdout backtest report score-holdout verify-frozen clean
@@ -16,11 +17,13 @@ help:
 	@echo "make env                     install pinned dependencies"
 	@echo "make data                    download M5, build CA_1/FOODS_3 snapshot + MANIFEST"
 	@echo "make holdout                 HUMAN ONLY: cut final 28 days out of the snapshot"
-	@echo "make backtest MODEL=<name>   rolling-origin backtest, appends to runs/runs.csv"
+	@echo "make backtest MODEL=<name>   rolling-origin backtest (8 folds x 3 seeds), appends to runs/runs.csv"
+	@echo "  ... SEEDS=42,7,123         override the seed list"
+	@echo "  ... PARENT=<run_id>        evaluate the keep rule against a v1 run; writes verdict"
 	@echo "make report                  table of all runs sorted by WRMSSE"
 	@echo "make report RUN=<run_id>     error breakdown for one run"
 	@echo "make score-holdout MODEL=<n> HUMAN ONLY: one shot against holdout/"
-	@echo "make verify-frozen           diff frozen files against tag v0-harness"
+	@echo "make verify-frozen           diff frozen files against tag v1-harness"
 	@echo "KEPLER_RUNS_DIR=<dir> make backtest ...   log to <dir> instead of runs/ (adversary reruns)"
 
 env:
@@ -35,7 +38,7 @@ holdout:
 
 backtest:
 	@if [ -z "$(MODEL)" ]; then echo "usage: make backtest MODEL=<name>"; exit 2; fi
-	$(PY) python -m src.backtest --model $(MODEL) --seed $(SEED) --author $(AUTHOR)
+	$(PY) python -m src.backtest --model $(MODEL) --seeds $(SEEDS) --author $(AUTHOR) $(if $(PARENT),--parent $(PARENT),)
 
 report:
 ifeq ($(strip $(RUN)),)
@@ -49,8 +52,8 @@ score-holdout:
 	$(PY) python -m src.score_holdout --model $(MODEL)
 
 verify-frozen:
-	@echo "--- diff vs v0-harness on frozen files (empty output = clean) ---"
-	@git diff v0-harness -- src/scorer.py src/report.py
+	@echo "--- diff vs v1-harness on frozen files (empty output = clean) ---"
+	@git diff v1-harness -- src/scorer.py src/report.py
 
 clean:
 	rm -rf .venv __pycache__ src/__pycache__
