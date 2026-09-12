@@ -25,7 +25,7 @@ HOLDOUT = ROOT / "holdout"
 
 COMPETITION = "m5-forecasting-accuracy"
 STORE_ID = "CA_1"
-DEPT_ID = "FOODS_3"
+DEPT_ID = None  # v1: all departments in the store (v0 was "FOODS_3")
 HOLDOUT_DAYS = 28
 
 SNAPSHOT_FILES = ("sales.parquet", "calendar.parquet", "prices.parquet")
@@ -108,19 +108,17 @@ def download() -> None:
 
 def build_snapshot() -> None:
     SNAPSHOT.mkdir(parents=True, exist_ok=True)
-    if (HOLDOUT / "sales.parquet").exists():
-        raise SystemExit(
-            "holdout/ already exists. Rebuilding the snapshot would re-expose the held-out "
-            "days. Delete holdout/ deliberately if you really mean to reset the experiment."
-        )
 
     calendar = pd.read_csv(RAW / "calendar.csv", parse_dates=["date"])
     sales = pd.read_csv(RAW / "sales_train_validation.csv")
     prices = pd.read_csv(RAW / "sell_prices.csv")
 
-    sales = sales[(sales["store_id"] == STORE_ID) & (sales["dept_id"] == DEPT_ID)].copy()
+    mask = sales["store_id"] == STORE_ID
+    if DEPT_ID is not None:
+        mask &= sales["dept_id"] == DEPT_ID
+    sales = sales[mask].copy()
     if sales.empty:
-        raise SystemExit(f"No rows for store {STORE_ID} / dept {DEPT_ID}.")
+        raise SystemExit(f"No rows for store {STORE_ID} / dept {DEPT_ID or 'ALL'}.")
     id_cols = ["id", "item_id", "dept_id", "cat_id", "store_id", "state_id"]
     day_cols = [c for c in sales.columns if c.startswith("d_")]
 
@@ -146,16 +144,26 @@ def build_snapshot() -> None:
         f"({days[0].date()} .. {days[-1].date()}), {len(long):,} rows"
     )
     print(f"manifest written to {SNAPSHOT / 'MANIFEST.txt'}")
+    print("NOTE: this snapshot is UNCUT. Human must run `make holdout` before any backtest.")
+
+
+def snapshot_is_cut(sales: pd.DataFrame, calendar: pd.DataFrame) -> bool:
+    """calendar.parquet always spans the full raw range; sales.parquet loses its final 28
+    days at `make holdout`. Equal end dates therefore mean the holdout has not been cut."""
+    return sales["date"].max() < calendar["date"].max()
 
 
 def cut_holdout() -> None:
     """HUMAN ONLY. Move the final 28 days out of the agent-visible snapshot."""
     verify_manifest()
     HOLDOUT.mkdir(parents=True, exist_ok=True)
-    if (HOLDOUT / "sales.parquet").exists():
-        raise SystemExit("holdout/ already cut. Refusing to cut twice.")
 
     sales = pd.read_parquet(SNAPSHOT / "sales.parquet")
+    calendar = pd.read_parquet(SNAPSHOT / "calendar.parquet")
+    if snapshot_is_cut(sales, calendar):
+        raise SystemExit("snapshot is already cut (its last day precedes the calendar's). Refusing to cut twice.")
+    if (HOLDOUT / "sales.parquet").exists():
+        print("holdout/ from a previous snapshot exists; it will be replaced.")
     days = sorted(sales["date"].unique())
     if len(days) <= HOLDOUT_DAYS * 5:
         raise SystemExit("Snapshot too short to cut a holdout and still run four folds.")
@@ -176,11 +184,14 @@ def cut_holdout() -> None:
 
 def load_snapshot() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     verify_manifest()
-    return (
-        pd.read_parquet(SNAPSHOT / "sales.parquet"),
-        pd.read_parquet(SNAPSHOT / "calendar.parquet"),
-        pd.read_parquet(SNAPSHOT / "prices.parquet"),
-    )
+    sales = pd.read_parquet(SNAPSHOT / "sales.parquet")
+    calendar = pd.read_parquet(SNAPSHOT / "calendar.parquet")
+    if not snapshot_is_cut(sales, calendar):
+        raise SystemExit(
+            "snapshot is UNCUT: its final 28 days are the future holdout. "
+            "Human must run `make holdout` before any backtest."
+        )
+    return sales, calendar, pd.read_parquet(SNAPSHOT / "prices.parquet")
 
 
 def main(argv: list[str] | None = None) -> int:

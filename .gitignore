@@ -19,3 +19,5 @@ __pycache__/
 # --- OS ---
 .DS_Store
 adversary/reruns/
+runs/runs.v0.bak
+runs/runs.partc.bak
