@@ -26,3 +26,5 @@ runs/runs.v1-partc.bak
 runs/runs.v2.bak
 runs/cycle-logs/
 runs/.cycle.lock/
+runs/runs.v3.bak
+data/*/raw

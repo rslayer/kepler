@@ -67,10 +67,16 @@ def verify_manifest(directory: Path, files: tuple[str, ...]) -> None:
 
 
 class M5Adapter:
-    def __init__(self, dataset_id: str, store_id: str, dept_id: str | None):
+    def __init__(self, dataset_id: str, store_id: str | None, dept_id: str | None, layout: str = "long"):
+        """layout="long": v0-v3 snapshot (long sales.parquet; holdout cut from the snapshot).
+        layout="wide": compact wide sales.parquet (one row per series, one int16 column per
+        day) and the holdout taken from sales_train_evaluation.csv's 28 extra days
+        (d_1914-d_1941, the competition's evaluation period) WITHOUT cutting the visible
+        snapshot - the agents see exactly what competitors saw."""
         self.dataset_id = dataset_id
         self.store_id = store_id
         self.dept_id = dept_id
+        self.layout = layout
         self.raw = ROOT / "data" / dataset_id / "raw"
         self.snapshot_dir = ROOT / "data" / dataset_id / "snapshot"
         self.holdout_dir = ROOT / "holdout" / dataset_id
@@ -105,14 +111,34 @@ class M5Adapter:
         calendar = pd.read_csv(self.raw / "calendar.csv", parse_dates=["date"])
         sales = pd.read_csv(self.raw / "sales_train_validation.csv")
         prices = pd.read_csv(self.raw / "sell_prices.csv")
-        mask = sales["store_id"] == self.store_id
+        mask = pd.Series(True, index=sales.index)
+        if self.store_id is not None:
+            mask &= sales["store_id"] == self.store_id
         if self.dept_id is not None:
             mask &= sales["dept_id"] == self.dept_id
         sales = sales[mask].copy()
         if sales.empty:
-            raise SystemExit(f"No rows for store {self.store_id} / dept {self.dept_id or 'ALL'}.")
+            raise SystemExit(f"No rows for store {self.store_id or 'ALL'} / dept {self.dept_id or 'ALL'}.")
         id_cols = ["id", "item_id", "dept_id", "cat_id", "store_id", "state_id"]
         day_cols = [c for c in sales.columns if c.startswith("d_")]
+        if self.layout == "wide":
+            wide = sales[id_cols + day_cols].copy()
+            for c in day_cols:
+                wide[c] = wide[c].astype("int16")
+            wide = wide.sort_values("id", kind="mergesort").reset_index(drop=True)
+            wide.to_parquet(self.snapshot_dir / "sales.parquet", index=False)
+            calendar.drop(columns=[]).to_parquet(self.snapshot_dir / "calendar.parquet", index=False)
+            prices_out = prices[prices["item_id"].isin(sales["item_id"].unique())]
+            if self.store_id is not None:
+                prices_out = prices_out[prices_out["store_id"] == self.store_id]
+            prices_out.reset_index(drop=True).to_parquet(self.snapshot_dir / "prices.parquet", index=False)
+            write_manifest(self.snapshot_dir, SNAPSHOT_FILES)
+            days = calendar.set_index("d").loc[day_cols, "date"]
+            print(f"snapshot {self.dataset_id} (wide): {len(wide)} series x {len(day_cols)} days "
+                  f"({days.iloc[0].date()} .. {days.iloc[-1].date()})")
+            print(f"manifest written to {self.snapshot_dir / 'MANIFEST.txt'}")
+            print("NOTE: holdout for this layout comes from sales_train_evaluation.csv; run `make holdout`.")
+            return
         long = sales.melt(id_vars=id_cols, value_vars=day_cols, var_name="d", value_name="sales")
         long["date"] = long["d"].map(calendar.set_index("d")["date"])
         long["sales"] = long["sales"].astype("int32")
@@ -144,9 +170,29 @@ class M5Adapter:
         return sales["date"].max() < calendar["date"].max()
 
     def cut_holdout(self) -> None:
-        """HUMAN ONLY. Move the final 28 days out of the agent-visible snapshot."""
+        """HUMAN ONLY. long layout: move the final 28 days out of the agent-visible snapshot.
+        wide layout: write the evaluation period (d_1914-d_1941) from sales_train_evaluation
+        as the holdout; the visible snapshot is untouched."""
         self.verify_manifest()
         self.holdout_dir.mkdir(parents=True, exist_ok=True)
+        if self.layout == "wide":
+            if (self.holdout_dir / "sales.parquet").exists():
+                raise SystemExit("holdout already written. Refusing to write twice.")
+            ev = pd.read_csv(self.raw / "sales_train_evaluation.csv")
+            snap = pd.read_parquet(self.snapshot_dir / "sales.parquet", columns=["id", "item_id", "store_id"])
+            ev["id"] = ev["id"].str.replace("_evaluation", "_validation", regex=False)
+            ev = ev[ev["id"].isin(snap["id"])]
+            day_cols = [c for c in ev.columns if c.startswith("d_")][-HOLDOUT_DAYS:]
+            held = ev[["id"] + day_cols].sort_values("id", kind="mergesort").reset_index(drop=True)
+            for c in day_cols:
+                held[c] = held[c].astype("int16")
+            if len(held) != len(snap):
+                raise SystemExit(f"evaluation file has {len(held)} of {len(snap)} snapshot series")
+            held.to_parquet(self.holdout_dir / "sales.parquet", index=False)
+            write_manifest(self.holdout_dir, ("sales.parquet",))
+            print(f"holdout {self.dataset_id}: {day_cols[0]}..{day_cols[-1]} ({len(held)} series) -> {self.holdout_dir}/sales.parquet")
+            print("visible snapshot untouched (competition setup). Commit holdout/<id>/MANIFEST.txt is NOT tracked; nothing to commit.")
+            return
         sales, calendar, _ = self._native()
         if self.is_cut(sales, calendar):
             raise SystemExit("snapshot is already cut. Refusing to cut twice.")
@@ -167,7 +213,80 @@ class M5Adapter:
         print("snapshot MANIFEST.txt regenerated. Commit it.")
 
     # ------------------------------------------------------------------ contract
+    def _load_wide(self, with_holdout: bool) -> Dataset:
+        import numpy as np
+        wide = pd.read_parquet(self.snapshot_dir / "sales.parquet")
+        calendar = pd.read_parquet(self.snapshot_dir / "calendar.parquet")
+        prices = pd.read_parquet(self.snapshot_dir / "prices.parquet")
+        if not (self.holdout_dir / "sales.parquet").exists():
+            raise SystemExit("holdout is not written for this dataset. Human must run `make holdout` before any backtest.")
+        day_cols = [c for c in wide.columns if c.startswith("d_")]
+        if with_holdout:
+            verify_manifest(self.holdout_dir, ("sales.parquet",))
+            held = pd.read_parquet(self.holdout_dir / "sales.parquet").set_index("id").loc[wide["id"]]
+            hcols = [c for c in held.columns if c.startswith("d_")]
+            for c in hcols:
+                wide[c] = held[c].to_numpy()
+            day_cols = day_cols + hcols
+        d2date = calendar.set_index("d")["date"]
+        dates = pd.DatetimeIndex(d2date.loc[day_cols])
+        ids = wide["id"].to_numpy()
+        values = wide[day_cols].to_numpy(dtype="int16")
+        n, t = values.shape
+        panel = pd.DataFrame({
+            "series_id": pd.Categorical(np.repeat(ids, t), categories=ids),
+            "date": np.tile(dates.to_numpy(), n),
+            "y": values.reshape(-1),
+        })
+        series = wide[["id", "item_id", "dept_id", "cat_id", "store_id", "state_id"]].rename(columns={"id": "series_id"}).reset_index(drop=True)
+
+        cal = calendar.copy()
+        cal["event_flag"] = (cal["event_name_1"].notna() | cal["event_name_2"].notna()).astype("int8")
+        for st in ("CA", "TX", "WI"):
+            cal[f"snap_{st}"] = cal[f"snap_{st}"].astype("int8")
+        cal["christmas"] = (cal["event_name_1"] == "Christmas").astype("int8")
+        exog_date = cal.drop(columns=["d"]).reset_index(drop=True)
+        exog_date = exog_date[exog_date["date"] >= dates[0]].reset_index(drop=True)
+        exog_dates = pd.DatetimeIndex(exog_date["date"])
+
+        # weekly prices -> (series x exog day) matrix directly; NaN where no price listed
+        wk_of_day = calendar.set_index("date").loc[exog_dates, "wm_yr_wk"].to_numpy()
+        weeks = np.unique(wk_of_day); wk_pos = {w: i for i, w in enumerate(weeks)}
+        key = series["store_id"] + "|" + series["item_id"]
+        row_of = {k: i for i, k in enumerate(key)}
+        pm_w = np.full((n, len(weeks)), np.nan, dtype="float32")
+        pk = (prices["store_id"] + "|" + prices["item_id"]).map(row_of)
+        pw = prices["wm_yr_wk"].map(wk_pos)
+        ok = pk.notna() & pw.notna()
+        pm_w[pk[ok].astype(int).to_numpy(), pw[ok].astype(int).to_numpy()] = prices.loc[ok, "sell_price"].to_numpy(dtype="float32")
+        price_matrix = pm_w[:, [wk_pos[w] for w in wk_of_day]]
+        # long exog_series is required by the contract; keep it lean (categorical id, float32)
+        exog_series = pd.DataFrame({
+            "series_id": pd.Categorical(np.repeat(ids, len(exog_dates)), categories=ids),
+            "date": np.tile(exog_dates.to_numpy(), n),
+            "sell_price": price_matrix.reshape(-1),
+        })
+        # rows with no listed price are absent in the long layout; drop NaN here too
+        exog_series = exog_series[exog_series["sell_price"].notna()].reset_index(drop=True)
+
+        roles = {
+            "calendar_flags": ["snap_CA", "event_flag"],  # snap for the series' own state is a v4 Part C feature
+            "price": "sell_price",
+            "weight_price": "sell_price",
+            "categoricals": ["item_id", "store_id"],
+            "hierarchy": [[], ["state_id"], ["store_id"], ["cat_id"], ["dept_id"],
+                          ["state_id", "cat_id"], ["state_id", "dept_id"], ["store_id", "cat_id"],
+                          ["store_id", "dept_id"], ["item_id"], ["item_id", "state_id"], ["item_id", "store_id"]],
+        }
+        ds = Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
+                     exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__)
+        ds.price_matrix = price_matrix  # optional fast path for features.Panel (aligned to series order, exog dates)
+        ds.price_matrix_dates = exog_dates
+        return ds
+
     def load(self, with_holdout: bool = False) -> Dataset:
+        if self.layout == "wide":
+            return self._load_wide(with_holdout)
         sales, calendar, prices = self._native()
         if not self.is_cut(sales, calendar):
             raise SystemExit("snapshot is UNCUT: its final 28 days are the future holdout. "

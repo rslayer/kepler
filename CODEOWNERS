@@ -3,6 +3,7 @@
 
 /src/scorer.py    @rslayer
 /src/report.py    @rslayer
+/src/scorer_hier.py @rslayer
 
 # Fold logic in backtest.py is human-owned. Agents may add MODELS entries only;
 # any change to make_folds() / the fold loop requires human review.
