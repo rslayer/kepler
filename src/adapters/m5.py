@@ -67,7 +67,8 @@ def verify_manifest(directory: Path, files: tuple[str, ...]) -> None:
 
 
 class M5Adapter:
-    def __init__(self, dataset_id: str, store_id: str | None, dept_id: str | None, layout: str = "long"):
+    def __init__(self, dataset_id: str, store_id: str | None, dept_id: str | None, layout: str = "long",
+                 timeout_minutes: int = 20):
         """layout="long": v0-v3 snapshot (long sales.parquet; holdout cut from the snapshot).
         layout="wide": compact wide sales.parquet (one row per series, one int16 column per
         day) and the holdout taken from sales_train_evaluation.csv's 28 extra days
@@ -77,6 +78,7 @@ class M5Adapter:
         self.store_id = store_id
         self.dept_id = dept_id
         self.layout = layout
+        self.timeout_minutes = timeout_minutes
         self.raw = ROOT / "data" / dataset_id / "raw"
         self.snapshot_dir = ROOT / "data" / dataset_id / "snapshot"
         self.holdout_dir = ROOT / "holdout" / dataset_id
@@ -280,7 +282,7 @@ class M5Adapter:
         }
         ds = Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
                      exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__,
-                     timeout_minutes=90)  # ~41 min sequential for lgbm_baseline on this laptop
+                     timeout_minutes=self.timeout_minutes)
         ds.price_matrix = price_matrix  # optional fast path for features.Panel (aligned to series order, exog dates)
         ds.price_matrix_dates = exog_dates
         return ds
@@ -322,4 +324,5 @@ class M5Adapter:
             "categoricals": ["item_id", "store_id"],
         }
         return Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
-                       exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__)
+                       exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__,
+                       timeout_minutes=self.timeout_minutes)

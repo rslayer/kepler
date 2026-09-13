@@ -163,10 +163,60 @@ class LGBMChristmasZero(LGBMBaseline):
         return np.where(closed, 0.0, preds)
 
 
+# ----------------------------------------------------------------------- recipe (SPEC_v4 Part C)
+# The published M5 recipe, added one ingredient at a time on top of the champion. Each class
+# changes exactly one thing relative to its parent so the ledger records what it was worth.
+
+
+class LGBMRecipe1Capacity(LGBMChristmasZero):
+    """Ingredient 1: capacity with early stopping. Up to 3000 rounds at lr 0.02, deeper
+    leaves, feature/bagging subsampling (seeded). The newest simulated training origin is
+    held out as the validation set for early stopping (its 28-day target window closes
+    before the fold origin, so no fold data is touched); the model is used as-is at its
+    best iteration."""
+
+    name = "recipe1_capacity"
+    PARAMS = {
+        **LGBMChristmasZero.PARAMS,
+        "n_estimators": 3000, "learning_rate": 0.02, "num_leaves": 127,
+        "min_child_samples": 100, "colsample_bytree": 0.7, "subsample": 0.7, "subsample_freq": 1,
+    }
+    EARLY_STOPPING_ROUNDS = 100
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "early_stopping": self.EARLY_STOPPING_ROUNDS, "validation": "newest_origin"}
+
+    def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
+        import lightgbm as lgb
+
+        params = dict(self.PARAMS)
+        params.update(random_state=seed, seed=seed, bagging_seed=seed, feature_fraction_seed=seed)
+        features = self.features
+        categorical = [c for c in features if c in CATEGORICAL_COLUMNS]
+        # rows from the newest simulated origin = validation; origin = target date - (h - 1)
+        origin_of_row = train["date"] - pd.to_timedelta(train["horizon"].astype(int) - 1, unit="D")
+        newest = origin_of_row.max()
+        val_mask = (origin_of_row == newest).to_numpy()
+        x_all = train[features]
+        x_tr, y_tr = x_all[~val_mask], train["y"][~val_mask]
+        x_va, y_va = x_all[val_mask], train["y"][val_mask]
+        x_pred = predict[features].copy()
+        for col in categorical:
+            cats = x_tr[col].cat.categories
+            x_va = x_va.assign(**{col: pd.Categorical(x_va[col], categories=cats)})
+            x_pred[col] = pd.Categorical(x_pred[col], categories=cats)
+        model = lgb.LGBMRegressor(**params)
+        model.fit(x_tr, y_tr, eval_set=[(x_va, y_va)], categorical_feature=categorical,
+                  callbacks=[lgb.early_stopping(self.EARLY_STOPPING_ROUNDS, verbose=False)])
+        self.last_best_iteration = int(model.best_iteration_ or params["n_estimators"])
+        return model.predict(x_pred, num_iteration=model.best_iteration_)
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
     LGBMChristmasZero.name: LGBMChristmasZero,
+    LGBMRecipe1Capacity.name: LGBMRecipe1Capacity,
 }
 
 

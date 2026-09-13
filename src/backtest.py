@@ -212,17 +212,33 @@ def _worker_fit(task: tuple) -> tuple:
     return (str(origin), seed, pred)
 
 
-def parallel_forecasts(dataset_id: str, model_name: str, origins: list, seeds: tuple, horizon: int, jobs: int) -> dict:
-    """{(origin_str, seed): forecast frame}, computed with `jobs` processes."""
+def parallel_forecasts(dataset_id: str, model_name: str, origins: list, seeds: tuple, horizon: int,
+                       jobs: int, budget_seconds: float | None = None) -> dict:
+    """{(origin_str, seed): forecast frame}, computed with `jobs` processes. Stops
+    submitting new fits once `budget_seconds` has elapsed; the caller then sees missing
+    (origin, seed) pairs and marks the run timeout, as the sequential path would."""
     import concurrent.futures as cf
     import multiprocessing as mp
     tasks = [(str(o), horizon, sd) for o in origins for sd in seeds]
     out = {}
+    t0 = time.time()
     ctx = mp.get_context("spawn")
     with cf.ProcessPoolExecutor(max_workers=jobs, mp_context=ctx,
                                 initializer=_worker_init, initargs=(dataset_id, model_name)) as ex:
-        for o, sd, pred in ex.map(_worker_fit, tasks):
-            out[(o, sd)] = pred
+        pending = {}
+        it = iter(tasks)
+        for _ in range(jobs):
+            t = next(it, None)
+            if t: pending[ex.submit(_worker_fit, t)] = t
+        while pending:
+            done, _ = cf.wait(list(pending), return_when=cf.FIRST_COMPLETED)
+            for fut in done:
+                pending.pop(fut)
+                o, sd, pred = fut.result()
+                out[(o, sd)] = pred
+                if budget_seconds is None or time.time() - t0 < budget_seconds:
+                    t = next(it, None)
+                    if t: pending[ex.submit(_worker_fit, t)] = t
     return out
 
 
@@ -255,7 +271,7 @@ def run_backtest(
           + ", ".join(str(pd.Timestamp(o).date()) for o in origins))
 
     started = time.time()
-    precomputed = (parallel_forecasts(dataset_id, model_name, origins, seeds, HORIZON, jobs)
+    precomputed = (parallel_forecasts(dataset_id, model_name, origins, seeds, HORIZON, jobs, timeout)
                    if jobs > 1 else None)
     fold_metrics: list[dict] = []          # per fold: mean across seeds
     seed_folds: dict[int, list[dict]] = {sd: [] for sd in seeds}  # per seed: per-fold metrics
@@ -269,6 +285,8 @@ def run_backtest(
 
         seed_details = []
         for sd in seeds:  # fits are sequential here unless --jobs precomputed them
+            if precomputed is not None and (str(origin), sd) not in precomputed:
+                break  # budget ran out during the parallel fits
             pred = precomputed[(str(origin), sd)] if precomputed else model.forecast(panel, origin, HORIZON, sd)
             if (pred["date"] < origin).any() or (pred["date"] > window_end).any():
                 raise SystemExit(f"model returned dates outside fold {i}'s window")
