@@ -279,7 +279,8 @@ class M5Adapter:
                           ["store_id", "dept_id"], ["item_id"], ["item_id", "state_id"], ["item_id", "store_id"]],
         }
         ds = Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
-                     exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__)
+                     exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__,
+                     timeout_minutes=90)  # ~41 min sequential for lgbm_baseline on this laptop
         ds.price_matrix = price_matrix  # optional fast path for features.Panel (aligned to series order, exog dates)
         ds.price_matrix_dates = exog_dates
         return ds

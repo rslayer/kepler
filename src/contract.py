@@ -44,6 +44,7 @@ class Dataset:
     roles: dict = field(default_factory=dict)
     horizon: int = 28
     notes: str = ""
+    timeout_minutes: int = 20  # whole-backtest budget; a run that exceeds it is logged as timeout
 
     @property
     def last_date(self) -> pd.Timestamp:
