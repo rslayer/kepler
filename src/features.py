@@ -128,6 +128,17 @@ class Panel:
             px = px.reindex(index=self.ids, columns=self.exog_dates)
             self.price_matrix = px.to_numpy(dtype=np.float32)
         self.price_column = PRICE_COLUMN
+        # other per-(series, date) exog columns as matrices (recipe ingredient 6: snap_own)
+        self.sd_matrices: dict[str, np.ndarray] = {}
+        fast = getattr(ds, "series_date_matrices", None) or {}
+        for col in ds.roles.get("series_flags", []):
+            if col in fast:
+                self.sd_matrices[col] = np.asarray(fast[col])
+            else:
+                mx = ds.exog_series.pivot(index="series_id", columns="date", values=col)
+                self.sd_matrices[col] = mx.reindex(index=self.ids, columns=self.exog_dates).to_numpy(dtype=np.float32)
+        # price group (recipe ingredient 5): attribute column for relative-price features
+        self.price_group = ds.roles.get("price_group")
 
     def pos(self, date: pd.Timestamp) -> int:
         """Column index of `date`. The day after the last panel day is allowed as an
@@ -223,6 +234,34 @@ def build_frame(
     #     the source column is origin_pos + h - 1 - k, which is strictly before the origin
     #     iff k >= h; otherwise the value is NaN (unavailable at the origin). Every read is
     #     asserted < origin_pos.
+    # --- recipe ingredient 5: price context (all from the price matrix; prices are
+    #     known-in-advance by the adapter's claim, the same assumption as the baseline)
+    pm = panel.price_matrix
+    hist_max = np.nanmax(np.where(np.isnan(pm[:, :origin_pos]), -np.inf, pm[:, :origin_pos]), axis=1)
+    hist_max = np.where(np.isfinite(hist_max), hist_max, np.nan)
+    p_t = pm[:, cols]                                             # target-day price
+    p_prev = pm[:, [max(c - 7, 0) for c in cols]]                 # price one week before the target day
+    frame["price_rel_max"] = (p_t / hist_max[:, None]).reshape(-1)
+    frame["price_momentum"] = (p_t / p_prev).reshape(-1)
+    frame["on_promo"] = (p_t < 0.95 * hist_max[:, None]).astype(np.float32).reshape(-1)
+    if panel.price_group:
+        grp = panel.attrs[panel.price_group]
+        gdf = pd.DataFrame(p_t, index=grp)
+        gmean = gdf.groupby(level=0).transform("mean").to_numpy(dtype=np.float32)
+        frame["price_rel_group"] = (p_t / gmean).reshape(-1)
+        promo = pd.DataFrame((p_t < 0.95 * hist_max[:, None]).astype(np.float32), index=grp)
+        frame["group_promo_share"] = promo.groupby(level=0).transform("mean").to_numpy(dtype=np.float32).reshape(-1)
+    # --- recipe ingredient 6: calendar detail known in advance
+    for col, mx in panel.sd_matrices.items():
+        frame[col] = mx[:, cols].reshape(-1)
+    cal_flags = panel.calendar["event_flag"].reindex(panel.exog_dates).fillna(0).to_numpy(dtype=np.float32) if "event_flag" in panel.calendar.columns else None
+    if cal_flags is not None:
+        for off in (-3, -2, -1, 1, 2, 3):
+            idx = np.clip(np.array(cols) + off, 0, len(cal_flags) - 1)
+            frame[f"event_{'lead' if off < 0 else 'lag'}{abs(off)}"] = np.tile(cal_flags[idx], n_series)
+    frame["day_of_month"] = frame["date"].dt.day.astype("int16")
+    frame["week_of_year"] = frame["date"].dt.isocalendar().week.astype("int16").to_numpy()
+
     for k in TARGET_LAGS:
         col = np.full((n_series, horizon), np.nan, dtype=np.float32)
         for h in range(1, horizon + 1):

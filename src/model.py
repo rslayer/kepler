@@ -268,6 +268,32 @@ class LGBMRecipe4Rolling(LGBMRecipe3Direct):
         return super().features + self.ROLL_EXTRA
 
 
+class LGBMRecipe5Price(LGBMRecipe4Rolling):
+    """Ingredient 5: price relative to the item's max to date, week-over-week price
+    momentum, an on-promotion flag, price relative to the price group's mean that day, and
+    the share of the group on promotion."""
+
+    name = "recipe5_price"
+    PRICE_EXTRA = ["price_rel_max", "price_momentum", "on_promo", "price_rel_group", "group_promo_share"]
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + self.PRICE_EXTRA
+
+
+class LGBMRecipe6Calendar(LGBMRecipe5Price):
+    """Ingredient 6: event lead/lag flags (+/-3 days), SNAP for the series' own state,
+    day of month, week of year."""
+
+    name = "recipe6_calendar"
+    CAL_EXTRA = ([f"event_lead{k}" for k in (3, 2, 1)] + [f"event_lag{k}" for k in (1, 2, 3)]
+                 + ["snap_own", "day_of_month", "week_of_year"])
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + self.CAL_EXTRA
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -276,6 +302,8 @@ MODELS: dict[str, type] = {
     LGBMRecipe2Tweedie.name: LGBMRecipe2Tweedie,
     LGBMRecipe3Direct.name: LGBMRecipe3Direct,
     LGBMRecipe4Rolling.name: LGBMRecipe4Rolling,
+    LGBMRecipe5Price.name: LGBMRecipe5Price,
+    LGBMRecipe6Calendar.name: LGBMRecipe6Calendar,
 }
 
 
