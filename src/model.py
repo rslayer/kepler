@@ -176,9 +176,12 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
     best iteration."""
 
     name = "recipe1_capacity"
+    # SPEC_v4 asked for lr 0.02 / 3000 rounds; that exceeded the 60-minute screening budget
+    # on this laptop (Tweedie fits ~8 min each). lr 0.05 / 1500 keeps the early-stopped
+    # capacity idea at ~2.5x fewer trees; recorded as a deviation in the changelog.
     PARAMS = {
         **LGBMChristmasZero.PARAMS,
-        "n_estimators": 3000, "learning_rate": 0.02, "num_leaves": 127,
+        "n_estimators": 1500, "learning_rate": 0.05, "num_leaves": 127,
         "min_child_samples": 100, "colsample_bytree": 0.7, "subsample": 0.7, "subsample_freq": 1,
     }
     EARLY_STOPPING_ROUNDS = 100
