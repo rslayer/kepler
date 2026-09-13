@@ -1,0 +1,38 @@
+{
+  "dataset": "m5_ca1",
+  "asof": "2016-03-28",
+  "horizon": 28,
+  "seed": 42,
+  "champion_tag": "v1-harness",
+  "model_name": "lgbm_baseline",
+  "champion_backtest_run": "r033",
+  "config_hash": "9bbdad874d23",
+  "git_commit": "1e1d3a3-dirty",
+  "features": [
+    "horizon",
+    "dow",
+    "month",
+    "snap_CA",
+    "event_flag",
+    "sell_price",
+    "lag_7",
+    "lag_14",
+    "lag_28",
+    "roll_mean_7",
+    "roll_mean_28",
+    "item_id",
+    "store_id"
+  ],
+  "snapshot_manifest": [
+    "2b04f4abfb5c241c2c036de366ad759a1653ec7ef860bdb38340fc11386676cb",
+    "sales.parquet",
+    "753f5751d11a7ea67decf1f6cec0df8f9114a7f03b62e33bc4bacb53cdaa952e",
+    "calendar.parquet",
+    "36d8ab54a8515ec354caeaf59c6dbe4667d24ded818529174c4c47898c7bfd3e",
+    "prices.parquet"
+  ],
+  "n_series": 3049,
+  "rows": 85372,
+  "seconds": 10.9,
+  "created_at": "2026-09-13T05:41:16+00:00"
+}
