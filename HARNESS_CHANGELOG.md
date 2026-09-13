@@ -1,5 +1,27 @@
 # Harness changelog
 
+## v2 field notes — cycle 1 (2026-09-12/13)
+
+First full cycle of the v2 loop, all four agent sessions launched as background subagents
+from the harness-owner session with the human's explicit go-ahead (the spec says
+human-launched; the cold-start property held because each subagent starts with only its
+prompt and its CLAUDE.md). Researcher-20260912-1: 16 runs in 2h08m (376 s/run), 2 kept
+(r037 Christmas-zero, r044 roll_mean_3), 0 repeats, stopped itself 52 min early. Adversary:
+r037 FAIL on item 5 (gain confined to the two folds containing 25 Dec, zero elsewhere) —
+overruled to PASS by the human as structural, recorded as row r055 beside the FAIL row
+r053; r044 INCONCLUSIVE on item 6 (66% of gain in top-5% series). Curator branch passed
+item 9 with three flagged lines, which the human amended before the gate. Merge gate:
+all four conditions met; merged as commit 9626220. Scorecard: keep_rate 0.08 -> 0.125,
+repeat_rate 0 -> 0. Fixes made during the cycle: scorecard repeats now use the ledger as
+committed at session start (re-testing an inconclusive row is allowed and was being
+counted); merge_gate falls back to a merge commit because main always moves after a
+curator branch is cut. Operational lessons: subagents background each five-minute
+backtest and pause, then resume on completion — that works, and the pause notifications
+are heartbeats; stopping one subagent with TaskStop killed another's running backtest
+(shared process group), which cost one rerun. For the next adversary spec: item 5 needs an
+event-driven clause (a gain confined to the folds whose windows contain a known calendar
+event, with zero delta elsewhere, is structural, not concentrated).
+
 ## v2 — 2026-09-12 (tag `v2-loop`, SPEC_v2_selfimprove.md)
 
 v1 fixed the keep rule but left the researcher amnesiac: each session started from the same
