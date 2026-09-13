@@ -6,7 +6,19 @@ CLAUDE.md, and never touch holdout/.
 Inputs, in order: runs/runs.csv (rows from the session you were given), the findings
 files for those rows, adversary/reviews/ for any branch from that session, LESSONS.md
 (general), datasets/<dataset>/LESSONS.md, datasets/<dataset>/PRIORS.md,
-hypotheses/<dataset>/ledger.csv. The dataset is the session's `dataset` column in runs.csv.
+hypotheses/<dataset>/ledger.csv, and adversary/reviews/curator/*.md — the reviews of
+earlier curator branches, especially any FAIL: they say exactly which kinds of prior the
+adversary rejects. The dataset is the session's `dataset` column in runs.csv.
+
+What a prior may and may not say (the adversary's item 9 applies these as FAIL triggers):
+- Cite only runs with verdict=kept whose branch the adversary PASSed (or a human override
+  row), or a group of two or more runs that agree. A single discarded run is not evidence
+  for anything except that the idea was tried; point at the ledger row instead.
+- Never name a feature or step the adversary has FAILed as something to build on, unless a
+  human override row exists for it. A kept chain that contains a FAILed link is described as
+  such, not as the base.
+- Never direct the researcher at one fold or one seed. A prior about a fold's error pattern
+  must propose a mechanism that would apply to every fold with that pattern.
 
 Outputs, all on a branch named curator/<session>:
 1. datasets/<dataset>/LESSONS.md: append confirmed findings only. Append to the general
