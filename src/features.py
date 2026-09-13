@@ -156,6 +156,14 @@ def asof_features(panel: Panel, origin_pos: int) -> dict[str, np.ndarray]:
         lo, hi = origin_pos - w, origin_pos
         assert hi <= origin_pos, "rolling window would read at or after the origin"
         out[f"roll_mean_{w}"] = panel.values[:, lo:hi].mean(axis=1)
+    # --- recipe extras (SPEC_v4 Part C); computed for every frame, consumed only by models
+    #     that list them. All windows end strictly before the origin.
+    # Ingredient 2: level growth = last-28-day mean / last-365-day mean (the level shift
+    # between the training window and the forecast window that Tweedie under-forecasts).
+    lo365 = max(origin_pos - 365, 0)
+    m28 = panel.values[:, origin_pos - 28:origin_pos].mean(axis=1)
+    m365 = panel.values[:, lo365:origin_pos].mean(axis=1)
+    out["level_ratio_28_365"] = np.where(m365 > 0, m28 / np.maximum(m365, 1e-9), 1.0).astype(np.float32)
     return out
 
 
