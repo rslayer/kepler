@@ -2,7 +2,8 @@
 
     python tools/merge_gate.py curator/<session>
 
-Exit 0 and fast-forward-merge the branch into main if and only if ALL of:
+Exit 0 and merge the branch into main (fast-forward if possible, else a merge commit) if
+and only if ALL of:
   1. tools/check_claude_diff.py main <branch> exits 0 (edits confined to the Priors block).
   2. adversary/reviews/curator/<session>.md exists on the branch or on main with verdict PASS.
   3. Every LESSONS.md line the branch adds cites at least one run whose runs.csv verdict is
@@ -99,8 +100,15 @@ def main(argv: list[str]) -> int:
                            f"repeat_rate {a.repeat_rate:.2f}->{b.repeat_rate:.2f}")
         print(f"condition 4 ok: keep_rate {a.keep_rate:.2f}->{b.keep_rate:.2f}, repeat_rate {a.repeat_rate:.2f}->{b.repeat_rate:.2f}")
 
-    git("merge", "--ff-only", branch)
-    print(f"MERGED {branch} into main (fast-forward):")
+    # Fast-forward when possible; otherwise a merge commit. main normally moves after a
+    # curator branch is cut (the adversary's review of that branch is committed on main),
+    # so a strict fast-forward would refuse every real curator branch.
+    if git("merge", "--ff-only", branch, check=False).returncode == 0:
+        how = "fast-forward"
+    else:
+        git("merge", "--no-ff", "--no-edit", "-m", f"merge {branch} (merge gate: all conditions met)", branch)
+        how = "merge commit"
+    print(f"MERGED {branch} into main ({how}):")
     print(git("diff", "--stat", f"HEAD@{{1}}", "HEAD").stdout.strip())
     return 0
 
