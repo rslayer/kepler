@@ -5,6 +5,8 @@
 Promote the branch's kept run to champion if and only if ALL of:
   1. runs.csv verdict is `kept` and the parent chain (keep_rule.parent in the detail JSONs)
      leads to the current champion's backtest_run - a challenger is built on the champion.
+  1b. on a confirmation dataset (tiers.json), the same model was also kept on its screening
+     dataset in the same session.
   2. adversary/reviews/exp/<run_id>.md says PASS, or a human override row exists in runs.csv
      (author=human, status=ok, model_name=exp/<run_id>).
   3. frozen files and the CLAUDE.md Rules block are unchanged on the branch vs the frozen tag.
@@ -98,6 +100,17 @@ def main(argv: list[str]) -> int:
             return refuse(1, f"parent chain {' <- '.join(chain)} does not reach champion {champ['backtest_run']}")
         chain.append(parent); cur = parent
     print(f"condition 1 ok: kept; chain {' <- '.join(chain)} reaches champion {champ['backtest_run']}")
+
+    # 1b. confirmation datasets need the same model kept on their screening dataset, same session
+    tiers = json.loads((ROOT / "tiers.json").read_text()).get("tiers", {}) if (ROOT / "tiers.json").exists() else {}
+    screen = tiers.get(dataset, {}).get("screen")
+    if screen:
+        ok = [r for r in runs.values() if r.get("dataset") == screen and r.get("model_name") == run["model_name"]
+              and r.get("verdict") == "kept" and r.get("session") == run.get("session")]
+        if not ok:
+            return refuse(1, f"(1b) no kept run of {run['model_name']} on the screening dataset {screen} in session "
+                             f"{run.get('session') or '?'}; a {dataset} candidate must win the screen and the confirmation")
+        print(f"condition 1b ok: {run['model_name']} kept on {screen} in the same session ({ok[-1]['run_id']})")
 
     # 2. adversary PASS or human override
     review = ROOT / "adversary" / "reviews" / "exp" / f"{run_id}.md"

@@ -1,0 +1,8 @@
+{
+  "tiers": {
+    "m5_all": {
+      "screen": "m5_ca1"
+    }
+  },
+  "note": "confirmation dataset -> its screening dataset. A kept screen result is confirmed by a kept run of the same model on the confirmation dataset in the same session; promotion on a confirmation dataset requires both (tools/promote.py condition 1b)."
+}

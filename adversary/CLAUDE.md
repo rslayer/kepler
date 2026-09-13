@@ -79,6 +79,9 @@ Per branch:
   FAIL if the paired gain over the parent is smaller than max(logged spread, rerun spread).
 - Item 8 (determinism): same recipe with the default seeds (omit SEEDS=). Means and spreads
   must match the logged row to six decimals.
+- m5_all branches (confirmation tier, ~45 min per three-seed backtest): for item 7 rerun
+  with SEEDS=11 only and compare the paired gain against the logged three-seed spread; for
+  item 8 rerun with the default seeds once. On m5_all the metric is wrmsse_hier.
   Reruns land in adversary/reruns/ (gitignored), never in runs/runs.csv. Restore src/ from
   main after every rerun; git status must be clean before the next branch.
 - Item 9 (curator/* branches only): git diff main curator/<session> -- datasets/ LESSONS.md
