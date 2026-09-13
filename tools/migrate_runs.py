@@ -5,7 +5,8 @@ and, after each of the six logged metrics, a `<metric>_spread` column (backfille
 v0 runs were single-seed, so no spread exists), and a trailing `verdict` column (Part D;
 backfilled empty - pre-v1 verdicts were the researcher's, not the harness's).
 v2 (SPEC_v2_selfimprove.md) appends `session` and `hypothesis_id`, backfilled empty; the
-v0 researcher runs' hypothesis mapping lives in hypotheses/ledger.csv. Idempotent: re-running is a no-op.
+v0 researcher runs' hypothesis mapping lives in hypotheses/ledger.csv.
+v3 (SPEC_v3_engine.md) appends `dataset`, backfilled m5_ca1. Idempotent: re-running is a no-op.
 
     python tools/migrate_runs.py [path/to/runs.csv]
 """
@@ -29,8 +30,10 @@ V1_COLUMNS = [
 ]
 V1_PARTC_COLUMNS = V1_COLUMNS[:-1]  # layout between v1 Part C and Part D (no verdict yet)
 V2_COLUMNS = V1_COLUMNS + ["session", "hypothesis_id"]
-TARGET = V2_COLUMNS
-KNOWN = {"v0": V0_COLUMNS, "v1-partc": V1_PARTC_COLUMNS, "v1": V1_COLUMNS, "v2": V2_COLUMNS}
+V3_COLUMNS = V2_COLUMNS + ["dataset"]
+TARGET = V3_COLUMNS
+V3_DEFAULT_DATASET = "m5_ca1"
+KNOWN = {"v0": V0_COLUMNS, "v1-partc": V1_PARTC_COLUMNS, "v1": V1_COLUMNS, "v2": V2_COLUMNS, "v3": V3_COLUMNS}
 V0_FOLD_SPACING = "28"
 
 
@@ -40,8 +43,8 @@ def migrate(path: Path) -> None:
         header = reader.fieldnames or []
         rows = list(reader)
     layout = next((name for name, cols in KNOWN.items() if header == cols), None)
-    if layout == "v2":
-        print(f"{path}: already v2 ({len(rows)} rows), nothing to do")
+    if layout == "v3":
+        print(f"{path}: already v3 ({len(rows)} rows), nothing to do")
         return
     if layout is None:
         raise SystemExit(f"{path}: unexpected header, refusing to migrate:\n  {header}")
@@ -55,6 +58,7 @@ def migrate(path: Path) -> None:
         r.setdefault("verdict", "")
         r.setdefault("session", "")
         r.setdefault("hypothesis_id", "")
+        r.setdefault("dataset", V3_DEFAULT_DATASET)
         out.append({k: r.get(k, "") for k in TARGET})
     backup = path.with_suffix(f".{layout}.bak")
     backup.write_bytes(path.read_bytes())
@@ -62,7 +66,7 @@ def migrate(path: Path) -> None:
         w = csv.DictWriter(fh, fieldnames=TARGET)
         w.writeheader()
         w.writerows(out)
-    print(f"{path}: migrated {len(out)} rows from {layout} to v2 (backup at {backup.name})")
+    print(f"{path}: migrated {len(out)} rows from {layout} to v3 (backup at {backup.name})")
 
 
 if __name__ == "__main__":

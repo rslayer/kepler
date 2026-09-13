@@ -77,15 +77,34 @@ class LGBMBaseline:
     }
     N_TRAIN_ORIGINS = 40
     TRAIN_ORIGIN_SPACING = 7
+    # Subclasses (experiments) override FEATURES / PARAMS / origin settings / hooks. The
+    # baseline keeps FEATURE_COLUMNS verbatim and adds no config keys, so its config hash
+    # (900159c6f3dd, run r033) and metrics do not move.
+    FEATURES: list[str] | None = None  # None = the bound dataset's FEATURE_COLUMNS
+
+    @property
+    def features(self) -> list[str]:
+        return list(FEATURE_COLUMNS) if self.FEATURES is None else list(self.FEATURES)
 
     def config(self) -> dict:
-        return {
+        cfg = {
             "kind": "lgbm",
             "params": dict(self.PARAMS),
-            "features": list(FEATURE_COLUMNS),
+            "features": self.features,
             "n_train_origins": self.N_TRAIN_ORIGINS,
             "train_origin_spacing": self.TRAIN_ORIGIN_SPACING,
         }
+        cfg.update(self.extra_config())
+        return cfg
+
+    def extra_config(self) -> dict:
+        """Experiment-specific config keys; empty for the baseline."""
+        return {}
+
+    def postprocess(self, predict: pd.DataFrame, preds: np.ndarray) -> np.ndarray:
+        """Post-fit hook (identity for the baseline): adjust raw predictions using only
+        columns of the predict frame that are known in advance (calendar, price, horizon)."""
+        return preds
 
     def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
         import lightgbm as lgb
@@ -94,14 +113,16 @@ class LGBMBaseline:
         params.update(random_state=seed, seed=seed, bagging_seed=seed, feature_fraction_seed=seed)
         model = lgb.LGBMRegressor(**params)
 
-        x_train = train[FEATURE_COLUMNS]
-        x_pred = predict[FEATURE_COLUMNS].copy()
+        features = self.features
+        categorical = [c for c in features if c in CATEGORICAL_COLUMNS]
+        x_train = train[features]
+        x_pred = predict[features].copy()
         # Align categorical dictionaries so LightGBM sees identical codes in both frames.
-        for col in CATEGORICAL_COLUMNS:
+        for col in categorical:
             categories = x_train[col].cat.categories
             x_pred[col] = pd.Categorical(x_pred[col], categories=categories)
 
-        model.fit(x_train, train["y"], categorical_feature=CATEGORICAL_COLUMNS)
+        model.fit(x_train, train["y"], categorical_feature=categorical)
         return model.predict(x_pred)
 
     def forecast(
@@ -116,6 +137,7 @@ class LGBMBaseline:
         )
         predict = build_frame(panel, origin, horizon, with_target=False)
         preds = self._fit_predict(train, predict, seed)
+        preds = self.postprocess(predict, preds)
         out = predict[["id", "date"]].copy()
         out["forecast"] = np.clip(preds, 0.0, None)
         return out

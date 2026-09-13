@@ -19,6 +19,8 @@
 /CODEOWNERS       @rslayer
 /data/snapshot/MANIFEST.txt @rslayer
 /runs/holdout.csv @rslayer
+/runs/promotions.csv @rslayer
+/champion.json    @rslayer
 
 /src/score_holdout.py @rslayer
 
