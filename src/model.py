@@ -21,6 +21,7 @@ from .features import (
     Panel,
     build_frame,
     build_training_set,
+    event_window_multipliers,
 )
 
 
@@ -163,10 +164,35 @@ class LGBMChristmasZero(LGBMBaseline):
         return np.where(closed, 0.0, preds)
 
 
+class LGBMXmasThanksgivingDept(LGBMChristmasZero):
+    """H041 (retest of H039 on the champion): multiply the Christmas-zeroed forecast on
+    Thanksgiving Day and the three days after it by the department's mean prior-year ratio of
+    that day to its four same-weekday days before (history strictly before the origin). No
+    40-origin training window contains a Thanksgiving; no model input changes."""
+
+    name = "lgbm_xmas0_tgd"
+
+    def extra_config(self) -> dict:
+        return {"postprocess": "christmas_zero+thanksgiving_dept4"}
+
+    def forecast(
+        self, panel: Panel, origin: pd.Timestamp, horizon: int = HORIZON, seed: int = 42
+    ) -> pd.DataFrame:
+        # predict rows are series-major (id repeated per horizon), matching reshape(-1)
+        self._mult = event_window_multipliers(
+            panel, panel.pos(origin), horizon, "Thanksgiving", "dept_id"
+        ).reshape(-1)
+        return super().forecast(panel, origin, horizon, seed)
+
+    def postprocess(self, predict: pd.DataFrame, preds: np.ndarray) -> np.ndarray:
+        return super().postprocess(predict, preds) * self._mult
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
     LGBMChristmasZero.name: LGBMChristmasZero,
+    LGBMXmasThanksgivingDept.name: LGBMXmasThanksgivingDept,
 }
 
 

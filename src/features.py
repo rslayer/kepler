@@ -154,6 +154,68 @@ def asof_features(panel: Panel, origin_pos: int) -> dict[str, np.ndarray]:
     return out
 
 
+def event_positions(panel: Panel, event: str) -> np.ndarray:
+    """Exog column indices (== panel column indices) of every date whose calendar names `event`
+    in any text column. Calendar events are published in advance."""
+    cal = panel.calendar
+    mask = np.zeros(len(cal), dtype=bool)
+    for c in cal.columns:
+        if not pd.api.types.is_numeric_dtype(cal[c]):
+            mask |= (cal[c] == event).fillna(False).to_numpy(dtype=bool)
+    idx = panel.exog_dates.get_indexer(cal.index[mask])
+    return np.sort(idx[idx >= 0])
+
+
+def group_totals(panel: Panel, attr: str) -> tuple[np.ndarray, np.ndarray]:
+    """(group index per series, float64 (n_groups, n_days) summed target), cached per attr."""
+    cache = panel.__dict__.setdefault("_group_totals", {})
+    if attr not in cache:
+        _, inv = np.unique(panel.attrs[attr], return_inverse=True)
+        totals = np.zeros((inv.max() + 1, panel.values.shape[1]), dtype=np.float64)
+        for g in range(totals.shape[0]):
+            totals[g] = panel.values[inv == g].sum(axis=0)
+        cache[attr] = (inv, totals)
+    return cache[attr]
+
+
+def event_window_multipliers(
+    panel: Panel,
+    origin_pos: int,
+    horizon: int,
+    event: str,
+    group_attr: str,
+    days: int = 4,
+    baseline_weeks: int = 4,
+) -> np.ndarray:
+    """float32 (n_series, horizon) multiplier: 1.0 except on the event day and the `days`-1 days
+    after it when they fall inside the horizon. There it is the mean, over prior occurrences of
+    the event, of group_total[T'+k] / mean(group_total[T'+k-7j], j=1..baseline_weeks), per
+    group of `group_attr`. Only occurrences with T'+k strictly before the origin are used, so
+    every target value read is at a column < origin_pos."""
+    n_series = panel.values.shape[0]
+    out = np.ones((n_series, horizon), dtype=np.float32)
+    ev = event_positions(panel, event)
+    assert len(ev), f"calendar lists no '{event}'"
+    inv, totals = group_totals(panel, group_attr)
+    for t in ev:
+        for k in range(days):
+            h = t + k - origin_pos
+            if not 0 <= h < horizon:
+                continue
+            ratios = []
+            for tp in ev:
+                src = tp + k
+                base = [src - 7 * j for j in range(1, baseline_weeks + 1)]
+                if src >= origin_pos or base[-1] < 0:
+                    continue
+                assert src < origin_pos and max(base) < origin_pos, "event ratio would read at/after origin"
+                denom = totals[:, base].mean(axis=1)
+                ratios.append(np.where(denom > 0, totals[:, src] / np.maximum(denom, 1e-9), 1.0))
+            if ratios:
+                out[:, h] = np.mean(ratios, axis=0)[inv]
+    return out
+
+
 def build_frame(
     panel: Panel,
     origin: pd.Timestamp,
