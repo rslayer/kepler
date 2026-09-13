@@ -18,3 +18,15 @@ Output of `python tools/check_claude_diff.py main HEAD` (run on the branch befor
 ```
 OK: CLAUDE.md changes are confined to the Priors block (main..HEAD)
 ```
+
+## Human amendments after adversary review (2026-09-13)
+
+The adversary passed this branch on item 9 and flagged three lines. The human changed them
+before the merge gate; nothing else was touched:
+1. Priors bullet 4: only r043 missed the paired-gain threshold alone; r038 and r051 also
+   regressed a fold past tolerance. Reworded to say so.
+2. Priors bullet 6: 80 origins raises the seed spread fifteenfold, not "doubles" (per
+   findings/r038.md).
+3. Priors bullet 9: removed the clause telling the researcher a human can overrule item 5;
+   that is adversary-spec business, not a research prior. Ledger H041 reworded so the
+   Thanksgiving override is never bundled into another change as a second variable.
