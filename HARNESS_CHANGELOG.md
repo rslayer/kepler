@@ -1,5 +1,26 @@
 # Harness changelog
 
+## v3 field notes — cycle 2 (2026-09-13), first headless cycle
+
+Run by `tools/cycle.sh m5_ca1 3` after the human renewed the CLI login (the first attempt
+aborted on `OAuth session expired`; the script now aborts a cycle when a session fails before
+doing work). Researcher-20260913-2: 14 runs in 2h20m, 3 kept (r060 Thanksgiving-dip
+multiplier; r061 roll_mean_3 re-implemented on the champion, matching its pre-contract twin
+to six decimals; r070 = 80 training origins with a 120-day half-life, the v0 "most
+promising unexplored" hypothesis H023, 7 of 8 folds better, best WRMSSE 0.798186), 0
+repeats, **cost $9.78 per session, $0.70 per run** — the number v0 could not report.
+Adversary: r060 FAIL (item 5: fold 1 supplies 100% of the gain — the same structural
+event-in-one-window case as r037's Christmas fix, no override on record); r061
+INCONCLUSIVE (item 6, 65% concentration, as its twin r044); r070 INCONCLUSIVE only because
+the headless session's rerun command was blocked by a permission prompt (`Bash(make:*)`
+does not match `KEPLER_RUNS_DIR=... make ...`; fixed in cycle.sh, plus a warning when an
+adversary session logs no reruns). r070 was re-reviewed with reruns afterwards (see
+adversary/reviews/exp/r070-rereview.md). Curator branch FAILed item 9 on substance: its
+priors built on the FAILed r060, cited discarded single runs as evidence, and aimed the
+first experiment at one fold; merge gate refused. The curator's instructions now spell out
+those three rules and make it read earlier curator reviews. Cycle wall clock 2h41m, total
+agent cost about $19.
+
 ## v3 — 2026-09-13 (tag `v3-engine`, SPEC_v3_engine.md)
 
 **Amendment (2026-09-13, human decision):** promotion condition 4 is "holdout not worse
