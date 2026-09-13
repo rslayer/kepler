@@ -191,6 +191,41 @@ def print_keep_rule(kr: dict) -> None:
     print(f"  verdict={kr['verdict']}")
 
 
+# ---------------------------------------------------------------------- parallel fits
+# --jobs N: the (fold, seed) fits run in N worker processes, each loading the dataset once.
+# Scoring, logging, the timeout check and the fold loop stay in the main process, in the
+# same order as sequential, so results are identical (each fit is independent and seeded).
+_W: dict = {}
+
+
+def _worker_init(dataset_id: str, model_name: str) -> None:
+    import os as _os
+    _os.environ.setdefault("OMP_NUM_THREADS", "4")
+    _W["ds"] = load_dataset(dataset_id)
+    _W["panel"] = Panel(_W["ds"])
+    _W["model"] = get_model(model_name)
+
+
+def _worker_fit(task: tuple) -> tuple:
+    origin, horizon, seed = task
+    pred = _W["model"].forecast(_W["panel"], pd.Timestamp(origin), horizon, seed)
+    return (str(origin), seed, pred)
+
+
+def parallel_forecasts(dataset_id: str, model_name: str, origins: list, seeds: tuple, horizon: int, jobs: int) -> dict:
+    """{(origin_str, seed): forecast frame}, computed with `jobs` processes."""
+    import concurrent.futures as cf
+    import multiprocessing as mp
+    tasks = [(str(o), horizon, sd) for o in origins for sd in seeds]
+    out = {}
+    ctx = mp.get_context("spawn")
+    with cf.ProcessPoolExecutor(max_workers=jobs, mp_context=ctx,
+                                initializer=_worker_init, initargs=(dataset_id, model_name)) as ex:
+        for o, sd, pred in ex.map(_worker_fit, tasks):
+            out[(o, sd)] = pred
+    return out
+
+
 # ------------------------------------------------------------------------------- driver
 def run_backtest(
     model_name: str,
@@ -201,6 +236,7 @@ def run_backtest(
     session: str = "",
     hypothesis_id: str = "",
     dataset_id: str = DEFAULT_DATASET,
+    jobs: int = 1,
 ) -> dict:
     parent = load_parent(parent_id) if parent_id else None  # fail fast, before any fit
     ds = load_dataset(dataset_id)
@@ -213,12 +249,14 @@ def run_backtest(
     metric = HIER_KEY if hierarchy else "wrmsse"
     timeout = int(getattr(ds, "timeout_minutes", TIMEOUT_SECONDS // 60)) * 60
 
-    print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author}")
+    print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author} jobs={jobs}")
     print(f"snapshot: {len(panel.ids)} series, {len(panel.dates)} days, last {panel.last_date.date()}")
     print(f"fold origins ({len(origins)} folds, {FOLD_SPACING}-day spacing, {HORIZON}-day horizon): "
           + ", ".join(str(pd.Timestamp(o).date()) for o in origins))
 
     started = time.time()
+    precomputed = (parallel_forecasts(dataset_id, model_name, origins, seeds, HORIZON, jobs)
+                   if jobs > 1 else None)
     fold_metrics: list[dict] = []          # per fold: mean across seeds
     seed_folds: dict[int, list[dict]] = {sd: [] for sd in seeds}  # per seed: per-fold metrics
     per_series: list[pd.DataFrame] = []    # per fold: per-series detail, mean across seeds
@@ -230,8 +268,8 @@ def run_backtest(
         train_long = sales[sales["date"] < origin]
 
         seed_details = []
-        for sd in seeds:  # sequential by design; no parallelism in v1
-            pred = model.forecast(panel, origin, HORIZON, sd)
+        for sd in seeds:  # fits are sequential here unless --jobs precomputed them
+            pred = precomputed[(str(origin), sd)] if precomputed else model.forecast(panel, origin, HORIZON, sd)
             if (pred["date"] < origin).any() or (pred["date"] > window_end).any():
                 raise SystemExit(f"model returned dates outside fold {i}'s window")
             metrics, detail = scorer.score_window(
@@ -390,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--session", default="", help="<role>-<YYYYMMDD>-<n>; required for researcher runs")
     parser.add_argument("--hypothesis", default="", help="H### from hypotheses/ledger.csv; required for researcher runs")
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
+    parser.add_argument("--jobs", type=int, default=1, help="worker processes for the (fold, seed) fits")
     args = parser.parse_args(argv)
     if args.author == "researcher" and not (args.session and args.hypothesis):
         raise SystemExit(
@@ -401,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
         if not seeds:
             raise SystemExit("--seeds must name at least one seed")
         run_backtest(args.model, seeds, args.author, args.folds, args.parent or None,
-                     args.session, args.hypothesis, args.dataset)
+                     args.session, args.hypothesis, args.dataset, max(1, args.jobs))
     except SystemExit:
         raise
     except Exception as exc:  # log the failure rather than losing it
