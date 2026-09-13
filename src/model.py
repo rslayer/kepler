@@ -253,6 +253,21 @@ class LGBMRecipe3Direct(LGBMRecipe2Tweedie):
         return out
 
 
+class LGBMRecipe4Rolling(LGBMRecipe3Direct):
+    """Ingredient 4: rolling mean/std/max over 7/14/28/56/180 days at the origin, zero-run
+    length, days since first sale, days since last sale (all strictly before the origin)."""
+
+    name = "recipe4_rolling"
+    ROLL_EXTRA = ([f"roll_mean_{w}" for w in (14, 56, 180)]
+                  + [f"roll_std_{w}" for w in (7, 14, 28, 56, 180)]
+                  + [f"roll_max_{w}" for w in (7, 14, 28, 56, 180)]
+                  + ["zero_run_length", "days_since_first_sale", "days_since_last_sale"])
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + self.ROLL_EXTRA
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -260,6 +275,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe1Capacity.name: LGBMRecipe1Capacity,
     LGBMRecipe2Tweedie.name: LGBMRecipe2Tweedie,
     LGBMRecipe3Direct.name: LGBMRecipe3Direct,
+    LGBMRecipe4Rolling.name: LGBMRecipe4Rolling,
 }
 
 

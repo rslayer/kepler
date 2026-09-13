@@ -165,6 +165,22 @@ def asof_features(panel: Panel, origin_pos: int) -> dict[str, np.ndarray]:
     m28 = panel.values[:, origin_pos - 28:origin_pos].mean(axis=1)
     m365 = panel.values[:, lo365:origin_pos].mean(axis=1)
     out["level_ratio_28_365"] = np.where(m365 > 0, m28 / np.maximum(m365, 1e-9), 1.0).astype(np.float32)
+    # Ingredient 4: rolling statistics at the origin and intermittency state.
+    hist = panel.values[:, :origin_pos]
+    for w in (14, 56, 180):
+        out[f"roll_mean_{w}"] = hist[:, max(origin_pos - w, 0):].mean(axis=1)
+    for w in (7, 14, 28, 56, 180):
+        win = hist[:, max(origin_pos - w, 0):]
+        out[f"roll_std_{w}"] = win.std(axis=1)
+        out[f"roll_max_{w}"] = win.max(axis=1)
+    nz = hist > 0
+    any_sale = nz.any(axis=1)
+    first_idx = np.where(any_sale, np.argmax(nz, axis=1), origin_pos)
+    last_idx = np.where(any_sale, origin_pos - 1 - np.argmax(nz[:, ::-1], axis=1), -1)
+    out["days_since_first_sale"] = np.minimum(origin_pos - first_idx, 2000).astype(np.float32)
+    out["days_since_last_sale"] = np.where(last_idx >= 0, origin_pos - last_idx, 2000).astype(np.float32)
+    # zero-run length ending at origin-1 (0 if the last day had a sale)
+    out["zero_run_length"] = np.where(last_idx >= 0, origin_pos - 1 - last_idx, origin_pos).astype(np.float32)
     return out
 
 
