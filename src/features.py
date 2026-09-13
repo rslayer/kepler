@@ -118,9 +118,14 @@ class Panel:
             (self.exog_dates[1:] - self.exog_dates[:-1]) != pd.Timedelta(days=1)
         ).any():
             raise ValueError("exog_date must be daily-contiguous and start on the panel's first day")
-        px = ds.exog_series.pivot(index="series_id", columns="date", values=PRICE_COLUMN)
-        px = px.reindex(index=self.ids, columns=self.exog_dates)
-        self.price_matrix = px.to_numpy(dtype=np.float32)
+        pm = getattr(ds, "price_matrix", None)
+        if pm is not None and list(getattr(ds, "price_matrix_dates", [])) == list(self.exog_dates) \
+                and list(ds.series["series_id"]) == list(self.ids):
+            self.price_matrix = np.asarray(pm, dtype=np.float32)  # adapter fast path
+        else:
+            px = ds.exog_series.pivot(index="series_id", columns="date", values=PRICE_COLUMN)
+            px = px.reindex(index=self.ids, columns=self.exog_dates)
+            self.price_matrix = px.to_numpy(dtype=np.float32)
         self.price_column = PRICE_COLUMN
 
     def pos(self, date: pd.Timestamp) -> int:

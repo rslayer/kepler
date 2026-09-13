@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import scorer
+from . import scorer, scorer_hier
 from .data import DEFAULT_DATASET, ROOT, load_dataset
 from .scoring import scorer_frames
 from .features import HORIZON, Panel
@@ -54,8 +54,10 @@ RUN_COLUMNS = [
     "wrmsse_spread", "wape_spread", "bias_spread",
     "wape_h1_7_spread", "wape_h8_14_spread", "wape_h15_28_spread",
     "seconds", "status", "findings_file", "author", "verdict", "session", "hypothesis_id", "dataset",
+    "wrmsse_hier", "wrmsse_hier_spread",
 ]
 METRIC_KEYS = ["wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28"]
+HIER_KEY = "wrmsse_hier"  # logged when the dataset's roles define a hierarchy; the keep rule then uses it
 
 
 # --------------------------------------------------------------------------- fold logic
@@ -130,7 +132,7 @@ def load_parent(run_id: str) -> dict:
     return parent
 
 
-def keep_rule(child_row: dict, child_folds: list[dict], parent: dict) -> dict:
+def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: str = "wrmsse") -> dict:
     """The v1 keep rule, evaluated on WRMSSE. All three conditions required for `kept`.
 
     1. paired gain: parent mean - child mean > 2 * max(parent spread, child spread),
@@ -142,10 +144,10 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict) -> dict:
     3. bias guardrail: |child bias| <= |parent bias| + 0.02.
     """
     p_agg = {k: float(np.mean([parent["seeds"][s]["aggregate"][k] for s in parent["seeds"]]))
-             for k in ("wrmsse", "bias")}
-    p_vals = [parent["seeds"][s]["aggregate"]["wrmsse"] for s in parent["seeds"]]
+             for k in (metric, "bias")}
+    p_vals = [parent["seeds"][s]["aggregate"][metric] for s in parent["seeds"]]
     p_spread = float(max(p_vals) - min(p_vals))
-    c_mean, c_spread, c_bias = (float(child_row["wrmsse"]), float(child_row["wrmsse_spread"]),
+    c_mean, c_spread, c_bias = (float(child_row[metric]), float(child_row[f"{metric}_spread"]),
                                 float(child_row["bias"]))
 
     tol = 2 * max(p_spread, c_spread)
@@ -159,10 +161,10 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict) -> dict:
         raise SystemExit("parent and child fold origins differ; runs are not comparable")
     per_fold = []
     for pf, cf in zip(p_folds, child_folds):
-        ftol = max(pf["wrmsse_spread"], cf["wrmsse_spread"])
-        regress = cf["wrmsse"] - pf["wrmsse"]
-        per_fold.append({"fold": cf["fold"], "origin": cf["origin"], "parent": pf["wrmsse"],
-                         "child": cf["wrmsse"], "delta": regress, "tolerance": ftol,
+        ftol = max(pf[f"{metric}_spread"], cf[f"{metric}_spread"])
+        regress = cf[metric] - pf[metric]
+        per_fold.append({"fold": cf["fold"], "origin": cf["origin"], "parent": pf[metric],
+                         "child": cf[metric], "delta": regress, "tolerance": ftol,
                          "pass": bool(regress <= ftol)})
     cond2 = {"pass": all(f["pass"] for f in per_fold), "folds": per_fold}
 
@@ -171,13 +173,13 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict) -> dict:
              "guardrail": BIAS_GUARDRAIL}
 
     verdict = "kept" if (cond1["pass"] and cond2["pass"] and cond3["pass"]) else "discarded"
-    return {"parent": parent["run_id"], "verdict": verdict,
+    return {"parent": parent["run_id"], "verdict": verdict, "metric": metric,
             "paired_gain": cond1, "no_fold_regresses": cond2, "bias_guardrail": cond3}
 
 
 def print_keep_rule(kr: dict) -> None:
     c1, c2, c3 = kr["paired_gain"], kr["no_fold_regresses"], kr["bias_guardrail"]
-    print(f"\nkeep rule vs parent {kr['parent']}:")
+    print(f"\nkeep rule vs parent {kr['parent']} on {kr.get('metric', 'wrmsse')}:")
     print(f"  1 paired gain      {'PASS' if c1['pass'] else 'FAIL'}  gain={c1['gain']:+.6f} "
           f"threshold={c1['threshold']:.6f} (2 x max spread)")
     worst = max(c2["folds"], key=lambda f: f["delta"] - f["tolerance"])
@@ -207,6 +209,8 @@ def run_backtest(
     origins = make_folds(panel, n_folds)
     seeds = tuple(seeds)
     sales, calendar, prices = scorer_frames(ds, origins[0])
+    hierarchy = ds.roles.get("hierarchy") or []
+    metric = HIER_KEY if hierarchy else "wrmsse"
 
     print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author}")
     print(f"snapshot: {len(panel.ids)} series, {len(panel.dates)} days, last {panel.last_date.date()}")
@@ -232,6 +236,12 @@ def run_backtest(
             metrics, detail = scorer.score_window(
                 truth[["id", "date", "sales"]], pred, train_long, prices, calendar
             )
+            if hierarchy:
+                hm, per_level = scorer_hier.score_window_hier(
+                    truth[["id", "date", "sales"]], pred, train_long, prices, calendar, ds.series, hierarchy
+                )
+                metrics[HIER_KEY] = hm["wrmsse_hier"]
+                metrics["hier_levels"] = hm["levels"]
             metrics["fold"] = i
             metrics["origin"] = str(pd.Timestamp(origin).date())
             metrics["seed"] = sd
@@ -241,7 +251,11 @@ def run_backtest(
                 break
 
         done = [seed_folds[sd][-1] for sd in seeds if len(seed_folds[sd]) == i]
-        fold_mean = {k: float(np.mean([m[k] for m in done])) for k in METRIC_KEYS}
+        keys = METRIC_KEYS + ([HIER_KEY] if hierarchy else [])
+        fold_mean = {k: float(np.mean([m[k] for m in done])) for k in keys}
+        if hierarchy:
+            fold_mean["wrmsse_hier_spread"] = float(max(m[HIER_KEY] for m in done) - min(m[HIER_KEY] for m in done))
+            fold_mean["hier_levels"] = {lv: float(np.mean([m["hier_levels"][lv] for m in done])) for lv in done[0]["hier_levels"]}
         fold_mean.update(
             fold=i,
             origin=str(pd.Timestamp(origin).date()),
@@ -256,9 +270,10 @@ def run_backtest(
         )
 
         elapsed = time.time() - started
+        hier_txt = f" hier={fold_mean[HIER_KEY]:.6f}" if hierarchy else ""
         print(
             f"  fold {i} origin={pd.Timestamp(origin).date()} "
-            f"wrmsse={fold_mean['wrmsse']:.6f} (spread {fold_mean['wrmsse_spread']:.6f}) "
+            f"wrmsse={fold_mean['wrmsse']:.6f} (spread {fold_mean['wrmsse_spread']:.6f}){hier_txt} "
             f"wape={fold_mean['wape']:.6f} bias={fold_mean['bias']:+.6f}  "
             f"[{len(done)}/{len(seeds)} seeds, {elapsed:.1f}s]"
         )
@@ -291,7 +306,10 @@ def run_backtest(
     if status == "ok":
         # Aggregate each seed over folds with the frozen scorer, then mean / spread across seeds.
         seed_aggregates = {sd: scorer.aggregate_folds(seed_folds[sd]) for sd in seeds}
-        for k in METRIC_KEYS:
+        if hierarchy:
+            for sd in seeds:
+                seed_aggregates[sd][HIER_KEY] = float(np.mean([m[HIER_KEY] for m in seed_folds[sd]]))
+        for k in METRIC_KEYS + ([HIER_KEY] if hierarchy else []):
             vals = [seed_aggregates[sd][k] for sd in seeds]
             row[k] = f"{float(np.mean(vals)):.6f}"
             row[f"{k}_spread"] = f"{float(max(vals) - min(vals)):.6f}"
@@ -303,7 +321,8 @@ def run_backtest(
         row["verdict"] = "discarded"
         kr = {"parent": parent["run_id"], "verdict": "discarded", "reason": f"run status {status}"}
     else:
-        kr = keep_rule(row, fold_metrics, parent)
+        use = metric if (metric in row and "seeds" in parent and all(HIER_KEY in parent["seeds"][s]["aggregate"] for s in parent["seeds"])) else "wrmsse"
+        kr = keep_rule(row, fold_metrics, parent, use)
         row["verdict"] = kr["verdict"]
 
     DETAIL_DIR.mkdir(parents=True, exist_ok=True)
@@ -319,6 +338,7 @@ def run_backtest(
                 "run_id": run_id,
                 "model_name": model_name,
                 "dataset": dataset_id,
+                "metric": metric,
                 "seed": ",".join(map(str, seeds)),  # frozen report.py prints detail["seed"]
                 "seed_list": list(seeds),
                 "fold_spacing": FOLD_SPACING,
@@ -341,7 +361,9 @@ def run_backtest(
     print(f"\nlogged {run_id}  status={status}  seconds={seconds:.1f}")
     if status == "ok":
         print(
-            f"  WRMSSE={row['wrmsse']} (spread {row['wrmsse_spread']})  WAPE={row['wape']}  bias={row['bias']}\n"
+            f"  WRMSSE={row['wrmsse']} (spread {row['wrmsse_spread']})"
+            + (f"  WRMSSE_hier={row['wrmsse_hier']} (spread {row['wrmsse_hier_spread']})" if hierarchy else "")
+            + f"  WAPE={row['wape']}  bias={row['bias']}\n"
             f"  WAPE h1-7={row['wape_h1_7']} h8-14={row['wape_h8_14']} h15-28={row['wape_h15_28']}"
         )
     print(f"  detail: runs/detail/{run_id}.json   findings: {row['findings_file']}")

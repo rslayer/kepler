@@ -3,10 +3,13 @@
 Purpose: make "world-class" measurable and then move toward it. v0–v3 proved the loop and
 built the engine on one store, scored at the item level. v4 (1) puts the engine on the full
 M5 dataset with the competition's official 12-level WRMSSE, scored on the competition's own
-evaluation window so the number is directly comparable to the public leaderboard
-(winner 0.520; top-50 roughly 0.57; the organisers' statistical benchmarks 0.75–0.85 —
-the last two are approximate and should be re-read from the leaderboard before they are
-quoted); (2) keeps the fast one-store harness as a screening tier so the loop's throughput
+evaluation window so the number is directly comparable to the public leaderboard. From
+the organisers' own "Scores and Ranks" file (datasets/m5_all/M5_Scores_and_Ranks.xlsx,
+Mcompetitions/M5-methods on GitHub): winner 0.5204, rank 10 about 0.55, rank 50 about
+0.58; the organisers' benchmarks are seasonal naive 0.847, the best exponential-smoothing
+bottom-up 0.671, the best statistical combination 0.682, and their MLP/RF benchmarks
+0.96–1.07. The item-store level alone (L12) is 0.88–0.91 even for the top 50: most of a
+leaderboard score comes from the aggregate levels. (2) keeps the fast one-store harness as a screening tier so the loop's throughput
 survives; (3) replaces the 300-tree baseline with the published M5 recipe as the new
 champion, built by hand, so the loop refines a strong model instead of rediscovering 2020;
 (4) makes promotion seasonal-aware through the live scoreboard. Nothing in v4 changes the
@@ -69,8 +72,10 @@ Definitions:
   visible; holdout has 30,490 x 28; manifests written; the screening tier `m5_ca1` is
   untouched (hashes unchanged).
 - `make backtest MODEL=seasonal_naive DATASET=m5_all` logs `wrmsse` and `wrmsse_hier`;
-  `wrmsse_hier` for the seasonal naive is in the range the organisers published for naive
-  methods (roughly 1.0–1.1); the per-level table has 12 rows.
+  `wrmsse_hier` for the seasonal naive is of the same order as the organisers' sNaive
+  benchmark (0.847 on the evaluation month; L1 0.560, L12 1.176) — not equal, since the
+  backtest windows differ from the evaluation month; the per-level table has 12 rows and
+  L12 equals the level-12 scorer's `wrmsse` exactly.
 - `make backtest MODEL=lgbm_baseline DATASET=m5_all` completes under 60 minutes and twice
   gives identical means and spreads.
 - `make backtest MODEL=lgbm_baseline DATASET=m5_ca1` still reproduces r033 to six decimals.
@@ -136,7 +141,7 @@ row first, also one shot).
   ingredient with its measured contribution on `m5_ca1`.
 - `lgbm_recipe` is kept against `lgbm_baseline` on both tiers.
 - Yardstick (`runs/holdout.csv`, dataset `m5_all`): `lgbm_recipe`'s `wrmsse_hier` is below
-  0.65 — beating the organisers' benchmarks by a clear margin — and recorded once. The
+  0.65 — beating every organiser benchmark (best: ES_bu 0.671) — and recorded once. The
   world-class goal (0.55 or better) is NOT a v4 acceptance criterion; it is what the loop
   works toward from here.
 - `lgbm_recipe` is promoted to `champion/m5_all/v1` through `tools/promote.py`.

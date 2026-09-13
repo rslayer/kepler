@@ -12,6 +12,8 @@ from . import m5
 
 ADAPTERS = {
     "m5_ca1": m5.M5Adapter(dataset_id="m5_ca1", store_id="CA_1", dept_id=None),
+    # all 10 stores, competition setup: visible d_1-d_1913, holdout = evaluation period d_1914-d_1941
+    "m5_all": m5.M5Adapter(dataset_id="m5_all", store_id=None, dept_id=None, layout="wide"),
 }
 
 
