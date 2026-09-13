@@ -76,3 +76,4 @@ r074,2026-09-13T21:00:59+00:00,7d5e8a2,exp/r060,7bac85da4bce,8,14,,,,,,,,,,,,,,r
 r075,2026-09-13T21:00:59+00:00,7d5e8a2,exp/r061,486bd2e44378,8,14,,,,,,,,,,,,,,rejected,adversary/reviews/exp/r061.md,adversary,,adversary-20260913-3,,m5_ca1
 r076,2026-09-13T21:00:59+00:00,7d5e8a2,exp/r070,5f39caedbfa9,8,14,,,,,,,,,,,,,,rejected,adversary/reviews/exp/r070.md,adversary,,adversary-20260913-3,,m5_ca1
 r077,2026-09-13T21:15:10+00:00,5b02b5e,curator/researcher-20260913-2,,,,,,,,,,,,,,,,,rejected,adversary/reviews/curator/researcher-20260913-2.md,adversary,,adversary-20260913-4,,m5_ca1
+r078,2026-09-13T21:46:37+00:00,d300acd,exp/r070,5f39caedbfa9,8,14,0.798186,0.761406,-0.008983,0.736043,0.758737,0.775545,0.001385,0.002201,0.004266,0.001471,0.001353,0.003070,986.1,rejected,adversary/reviews/exp/r070-rereview.md,adversary,,adversary-20260913-5,,m5_ca1
