@@ -30,7 +30,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "runs" / "runs.csv"
-LEDGER = ROOT / "hypotheses" / "ledger.csv"
+LEDGER_DIR = ROOT / "hypotheses"  # <dataset>/ledger.csv; pre-v3 commits had hypotheses/ledger.csv
 FINDINGS = ROOT / "findings"
 OUT = ROOT / "LOOP_SCORECARD.md"
 V0_SESSION = "researcher-20260911-1"
@@ -62,18 +62,25 @@ def hypothesis_map(ledger: pd.DataFrame) -> dict[str, str]:
 
 def compute() -> pd.DataFrame:
     runs = pd.read_csv(RUNS, dtype=str).fillna("")
-    ledger = pd.read_csv(LEDGER, dtype=str).fillna("")
     res = runs[runs["author"] == "researcher"].copy()
     if res.empty:
         return pd.DataFrame()
     res["session"] = res["session"].where(res["session"] != "", V0_SESSION)
+    res["dataset"] = res.get("dataset", "").replace("", "m5_ca1") if "dataset" in res else "m5_ca1"
+    ledgers = {}
+    for dataset in res["dataset"].unique():
+        p_ = LEDGER_DIR / dataset / "ledger.csv"
+        if not p_.exists():
+            p_ = LEDGER_DIR / "ledger.csv"
+        ledgers[dataset] = pd.read_csv(p_, dtype=str).fillna("") if p_.exists() else pd.DataFrame(columns=["hypothesis_id", "status", "first_run", "last_run", "sessions"])
+    ledger = pd.concat(ledgers.values(), ignore_index=True) if ledgers else pd.DataFrame()
     res["ts"] = pd.to_datetime(res["timestamp"], utc=True, errors="coerce")
     hmap = hypothesis_map(ledger)
     res["hyp"] = [h if h else hmap.get(r, "") for h, r in zip(res["hypothesis_id"], res["run_id"])]
     res["kept_flag"] = [
         v == "kept" or (v == "" and v0_kept(r)) for v, r in zip(res["verdict"], res["run_id"])
     ]
-    def ledger_status_at(first_ts: pd.Timestamp) -> dict[str, str]:
+    def ledger_status_at(first_ts: pd.Timestamp, dataset: str = "m5_ca1") -> dict[str, str]:
         """Ledger status per hypothesis as committed on main just before `first_ts`."""
         if pd.isna(first_ts):
             return {}
@@ -82,9 +89,12 @@ def compute() -> pd.DataFrame:
                              cwd=ROOT, capture_output=True, text=True).stdout.strip()
         if not sha:
             return {}
-        shown = subprocess.run(["git", "show", f"{sha}:hypotheses/ledger.csv"],
-                               cwd=ROOT, capture_output=True, text=True)
-        if shown.returncode != 0:
+        shown = None
+        for rel in (f"hypotheses/{dataset}/ledger.csv", "hypotheses/ledger.csv"):
+            r_ = subprocess.run(["git", "show", f"{sha}:{rel}"], cwd=ROOT, capture_output=True, text=True)
+            if r_.returncode == 0:
+                shown = r_; break
+        if shown is None:
             return {}  # ledger did not exist yet
         import io
         old = pd.read_csv(io.StringIO(shown.stdout), dtype=str).fillna("")
@@ -95,7 +105,7 @@ def compute() -> pd.DataFrame:
         ok = g[g["status"] == "ok"]
         n = len(ok)
         kept = int(ok["kept_flag"].sum())
-        status_at_start = ledger_status_at(g["ts"].min())
+        status_at_start = ledger_status_at(g["ts"].min(), g["dataset"].iloc[0])
         repeats = sum(1 for h in ok["hyp"] if h and status_at_start.get(h) in ("discarded", "kept"))
         wall = (g["ts"].max() - g["ts"].min()).total_seconds() / 60 if g["ts"].notna().any() else float("nan")
         best = pd.to_numeric(ok["wrmsse"], errors="coerce").min()

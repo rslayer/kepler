@@ -4,9 +4,11 @@
 
 Exit 0 and merge the branch into main (fast-forward if possible, else a merge commit) if
 and only if ALL of:
-  1. tools/check_claude_diff.py main <branch> exits 0 (edits confined to the Priors block).
+  1. tools/check_claude_diff.py main <branch> exits 0 (CLAUDE.md Rules block unchanged) and
+     the branch touches only datasets/*/{LESSONS,PRIORS}.md, hypotheses/*/ledger.csv,
+     LESSONS.md, and curator/reports/.
   2. adversary/reviews/curator/<session>.md exists on the branch or on main with verdict PASS.
-  3. Every LESSONS.md line the branch adds cites at least one run whose runs.csv verdict is
+  3. Every lessons line the branch adds (general or dataset file) cites at least one run whose runs.csv verdict is
      `kept`, or cites two or more distinct runs; every cited run must exist in runs.csv.
   4. The scorecard's most recent researcher session is not worse than the one before it on
      both keep_rate and repeat_rate (skipped with a notice when fewer than two sessions).
@@ -73,8 +75,20 @@ def main(argv: list[str]) -> int:
         return fail(2, f"adversary verdict is {verdict or 'missing'}, not PASS")
     print(f"condition 2 ok: adversary review {rel} says PASS")
 
+    # 1b. touched paths: memory files and the report only (CLAUDE.md included in the ban)
+    base = git("merge-base", "main", branch).stdout.strip()
+    touched = git("diff", "--name-only", base, branch).stdout.split()
+    allowed = ("LESSONS.md", "curator/reports/")
+    bad = [p for p in touched if not (p in allowed or p.startswith("curator/reports/")
+                                      or re.fullmatch(r"datasets/[^/]+/(LESSONS|PRIORS)\.md", p)
+                                      or re.fullmatch(r"hypotheses/[^/]+/ledger\.csv", p))]
+    if bad:
+        return fail(1, f"branch touches paths a curator may not edit: {bad}")
+    print(f"condition 1 ok: touched {len(touched)} allowed file(s)")
+
     # 3. evidence
-    diff = git("diff", f"main...{branch}", "--", "LESSONS.md").stdout
+    lesson_files = [p for p in touched if p == "LESSONS.md" or re.fullmatch(r"datasets/[^/]+/LESSONS\.md", p)]
+    diff = git("diff", f"main...{branch}", "--", *lesson_files).stdout if lesson_files else ""
     added = [l[1:] for l in diff.splitlines() if l.startswith("+- [")]
     runs_csv = (ROOT / "runs" / "runs.csv").read_text().splitlines()
     header = runs_csv[0].split(",")

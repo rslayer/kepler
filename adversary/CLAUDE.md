@@ -24,8 +24,8 @@ Checklist, in order, all mandatory:
 7. Noise floor: rerun the branch with two different seeds. If the gain is
    smaller than the seed-to-seed spread, FAIL.
 8. Determinism: rerun the branch once. Metrics must match the logged run.
-9. Instruction leakage (every curator/* branch, mandatory): read the CLAUDE.md
-   diff. FAIL if any new prior encodes look-ahead, names a feature the adversary
+9. Instruction leakage (every curator/* branch, mandatory): read the priors
+   diff (datasets/<dataset>/PRIORS.md; CLAUDE.md itself must be unchanged). FAIL if any new prior encodes look-ahead, names a feature the adversary
    has failed, tunes to a single fold or a single seed, or cites a run whose
    verdict is not `kept` or whose evidence is a single run. FAIL if
    `tools/check_claude_diff.py` is non-zero. Otherwise PASS.
@@ -74,15 +74,18 @@ Per branch:
 - Item 7 (noise floor): the logged wrmsse_spread is the three-seed spread. For an
   independent check, rerun with two seeds the harness did not use:
       git checkout exp/<b> -- src/features.py src/model.py
-      KEPLER_RUNS_DIR=adversary/reruns make backtest MODEL=<model_name> SEEDS=11,99 AUTHOR=adversary SESSION=<your session id>
+      KEPLER_RUNS_DIR=adversary/reruns make backtest MODEL=<model_name> DATASET=<dataset> SEEDS=11,99 AUTHOR=adversary SESSION=<your session id>
       git checkout main -- src/features.py src/model.py
   FAIL if the paired gain over the parent is smaller than max(logged spread, rerun spread).
 - Item 8 (determinism): same recipe with the default seeds (omit SEEDS=). Means and spreads
   must match the logged row to six decimals.
   Reruns land in adversary/reruns/ (gitignored), never in runs/runs.csv. Restore src/ from
   main after every rerun; git status must be clean before the next branch.
-- Item 9 (curator/* branches only): git diff main curator/<session> -- CLAUDE.md LESSONS.md
-  hypotheses/ledger.csv, then python tools/check_claude_diff.py main curator/<session>.
+- Item 9 (curator/* branches only): git diff main curator/<session> -- datasets/ LESSONS.md
+  hypotheses/ (the priors are datasets/<dataset>/PRIORS.md), then
+  python tools/check_claude_diff.py main curator/<session> (CLAUDE.md must be unchanged) and
+  git diff --name-only main curator/<session> (only datasets/, LESSONS.md, hypotheses/,
+  curator/reports/ may appear).
   For every run id a new prior or lesson cites: grep '^<run_id>,' runs/runs.csv and read
   its verdict; look up its adversary review. No reruns for item 9.
 

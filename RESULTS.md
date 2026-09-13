@@ -21,9 +21,10 @@ on that basis the rate is 57/h. 49/h is the conservative figure.
   Total 14.0 min of compute inside 30.4 min of wall clock — the agent spent roughly half
   its time thinking and half waiting on LightGBM.
 - Wall clock per run, all-in: **73 s**.
-- Cost per run: **not measured.** Sessions ran on a Claude desktop subscription, not API
-  billing, so no per-token cost was recorded. To get this number, rerun Phase 2 with
-  `ANTHROPIC_API_KEY` set and read the usage report.
+- Cost per run: **not measured in v0.** Sessions ran on a Claude desktop subscription, not
+  API billing. v3's `tools/cycle.sh` records per-session token usage and cost to
+  `runs/sessions.csv`; `python tools/cost_report.py` prints cost per researcher run once a
+  headless cycle has been run (SPEC_v3 Part E acceptance). First measured value: pending.
 
 ### 3. Adversary: planted leak caught **yes**; real branches rejected **2 of 2**
 

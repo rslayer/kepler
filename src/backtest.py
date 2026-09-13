@@ -31,7 +31,8 @@ import numpy as np
 import pandas as pd
 
 from . import scorer
-from .data import ROOT, load_snapshot
+from .data import DEFAULT_DATASET, ROOT, load_dataset
+from .scoring import scorer_frames
 from .features import HORIZON, Panel
 from .model import get_model
 
@@ -52,7 +53,7 @@ RUN_COLUMNS = [
     "wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28",
     "wrmsse_spread", "wape_spread", "bias_spread",
     "wape_h1_7_spread", "wape_h8_14_spread", "wape_h15_28_spread",
-    "seconds", "status", "findings_file", "author", "verdict", "session", "hypothesis_id",
+    "seconds", "status", "findings_file", "author", "verdict", "session", "hypothesis_id", "dataset",
 ]
 METRIC_KEYS = ["wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28"]
 
@@ -197,15 +198,17 @@ def run_backtest(
     parent_id: str | None = None,
     session: str = "",
     hypothesis_id: str = "",
+    dataset_id: str = DEFAULT_DATASET,
 ) -> dict:
     parent = load_parent(parent_id) if parent_id else None  # fail fast, before any fit
-    sales, calendar, prices = load_snapshot()
-    panel = Panel(sales, calendar, prices)
+    ds = load_dataset(dataset_id)
+    panel = Panel(ds)
     model = get_model(model_name)
     origins = make_folds(panel, n_folds)
     seeds = tuple(seeds)
+    sales, calendar, prices = scorer_frames(ds, origins[0])
 
-    print(f"model={model_name} seeds={list(seeds)} author={author}")
+    print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author}")
     print(f"snapshot: {len(panel.ids)} series, {len(panel.dates)} days, last {panel.last_date.date()}")
     print(f"fold origins ({len(origins)} folds, {FOLD_SPACING}-day spacing, {HORIZON}-day horizon): "
           + ", ".join(str(pd.Timestamp(o).date()) for o in origins))
@@ -282,6 +285,7 @@ def run_backtest(
         "author": author,
         "session": session,
         "hypothesis_id": hypothesis_id,
+        "dataset": dataset_id,
     }
     seed_aggregates = {}
     if status == "ok":
@@ -314,6 +318,7 @@ def run_backtest(
             {
                 "run_id": run_id,
                 "model_name": model_name,
+                "dataset": dataset_id,
                 "seed": ",".join(map(str, seeds)),  # frozen report.py prints detail["seed"]
                 "seed_list": list(seeds),
                 "fold_spacing": FOLD_SPACING,
@@ -361,6 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--parent", default=None, help="run_id to evaluate the keep rule against")
     parser.add_argument("--session", default="", help="<role>-<YYYYMMDD>-<n>; required for researcher runs")
     parser.add_argument("--hypothesis", default="", help="H### from hypotheses/ledger.csv; required for researcher runs")
+    parser.add_argument("--dataset", default=DEFAULT_DATASET)
     args = parser.parse_args(argv)
     if args.author == "researcher" and not (args.session and args.hypothesis):
         raise SystemExit(
@@ -372,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
         if not seeds:
             raise SystemExit("--seeds must name at least one seed")
         run_backtest(args.model, seeds, args.author, args.folds, args.parent or None,
-                     args.session, args.hypothesis)
+                     args.session, args.hypothesis, args.dataset)
     except SystemExit:
         raise
     except Exception as exc:  # log the failure rather than losing it
@@ -393,6 +399,7 @@ def main(argv: list[str] | None = None) -> int:
                 "verdict": "discarded" if args.parent else "no_parent",
                 "session": args.session,
                 "hypothesis_id": args.hypothesis,
+                "dataset": args.dataset,
             }
         )
         print(f"run failed, logged {run_id} with status=error: {type(exc).__name__}: {exc}", file=sys.stderr)

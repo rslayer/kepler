@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Template only: NOT installed by any agent. To install (human):
+       sed "s#__REPO__#$HOME/Desktop/Projects/kepler#" tools/launchd/com.kepler.cycle.plist.template \
+         > ~/Library/LaunchAgents/com.kepler.cycle.plist
+       launchctl load ~/Library/LaunchAgents/com.kepler.cycle.plist
+     Runs one cycle nightly at 01:00 local time; the morning summary is runs/cycle-logs/latest.txt. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.kepler.cycle</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string><string>-lc</string>
+    <string>cd __REPO__ && tools/cycle.sh m5_ca1 3 > runs/cycle-logs/latest.txt 2>&1</string>
+  </array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>1</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>__REPO__/runs/cycle-logs/launchd.out</string>
+  <key>StandardErrorPath</key><string>__REPO__/runs/cycle-logs/launchd.err</string>
+</dict></plist>

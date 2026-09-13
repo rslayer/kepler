@@ -1,5 +1,35 @@
 # Harness changelog
 
+## v3 — 2026-09-13 (tag `v3-engine`, SPEC_v3_engine.md)
+
+v2 made the loop learn; v3 makes it an engine. Data contract (`src/contract.py`): panel
+(series_id, date, y), series attributes, exog_date, exog_series, and roles; adapters
+(`src/adapters/m5.py`) own every dataset-specific name and the download/snapshot/holdout
+steps; datasets live under `data/<id>/` and `holdout/<id>/`; `make ... DATASET=<id>`
+everywhere; `runs.csv` gained `dataset`. `src/features.py` and `src/model.py` read only
+contract tables and roles (`features.bind()` resolves roles into FEATURE_COLUMNS once per
+process, so configs and hashes are stable: r057 reproduced r033 to six decimals with the
+same config hash 900159c6f3dd). The frozen scorer is fed through `src/scoring.py`, the one
+harness file that still spells its legacy column names. Champion registry
+(`champion.json`, human-owned) seeded with r033; `tools/promote.py` promotes an exp/*
+branch only when kept, adversary-PASS or human-overridden, frozen-clean, holdout-better
+(from a human-run `make score-holdout` row it will never produce itself), and cleanly
+mergeable on allowed paths; on success it tags `champion/<dataset>/vN` and logs
+`runs/promotions.csv`. Serving: `make forecast ASOF=<date>` writes
+`forecasts/<dataset>/<asof>/forecast.parquet` + provenance from the champion (a true-future
+forecast as of last day + 1 is allowed; the price matrix now spans the exog range);
+`make evaluate` scores past forecasts once actuals exist into `runs/live.csv`;
+`tools/live_report.py` puts live WRMSSE beside backtest WRMSSE per champion. Memory is per
+dataset: `datasets/<id>/{LESSONS,PRIORS}.md`, `hypotheses/<id>/ledger.csv`, with a 3-line
+general `LESSONS.md`; CLAUDE.md's block below the PRIORS marker is now harness notes only,
+and the curator may touch only memory files and its report (merge_gate condition 1).
+`tools/cycle.sh` runs a whole cycle headless (`claude -p`, per-session token cost to
+`runs/sessions.csv`, integrity check after every session, lock and dirty-tree refusals);
+promotion is deliberately outside it. The researcher's hooks from exp/r037 (FEATURES,
+extra_config, postprocess) are on main; the Christmas-zero model itself lives on the ported
+exp/r037 branch as the first challenger. exp/r010, exp/r022, exp/planted-leak and the
+pre-port exp/r037 (tag exp/r037-v2) and exp/r044 are pre-contract branches: historical.
+
 ## v2 field notes — cycle 1 (2026-09-12/13)
 
 First full cycle of the v2 loop, all four agent sessions launched as background subagents

@@ -6,6 +6,7 @@ UV := UV_SYSTEM_CERTS=1 uv
 PY := UV_SYSTEM_CERTS=1 uv run --
 
 MODEL ?=
+DATASET ?= m5_ca1
 RUN ?=
 SEEDS ?= 42,7,123
 PARENT ?=
@@ -13,11 +14,11 @@ SESSION ?=
 HYPOTHESIS ?=
 AUTHOR ?= human
 
-.PHONY: help env data holdout backtest report score-holdout verify-frozen scorecard merge-gate clean
+.PHONY: help env data holdout backtest report score-holdout verify-frozen scorecard merge-gate forecast evaluate live-report promote clean
 
 help:
 	@echo "make env                     install pinned dependencies"
-	@echo "make data                    download M5, build CA_1/FOODS_3 snapshot + MANIFEST"
+	@echo "make data DATASET=<id>       download + build snapshot + MANIFEST (default m5_ca1)"
 	@echo "make holdout                 HUMAN ONLY: cut final 28 days out of the snapshot"
 	@echo "make backtest MODEL=<name>   rolling-origin backtest (8 folds x 3 seeds), appends to runs/runs.csv"
 	@echo "  ... SEEDS=42,7,123         override the seed list"
@@ -27,6 +28,10 @@ help:
 	@echo "make report RUN=<run_id>     error breakdown for one run"
 	@echo "make score-holdout MODEL=<n> HUMAN ONLY: one shot against holdout/"
 	@echo "make verify-frozen           diff frozen files against tag v2-loop + CLAUDE.md Rules-block integrity"
+	@echo "make forecast ASOF=<date>    champion forecast -> forecasts/<dataset>/<asof>/"
+	@echo "make evaluate                score past forecasts whose actuals exist -> runs/live.csv"
+	@echo "make live-report             live WRMSSE per champion vs its backtest"
+	@echo "make promote BRANCH=exp/<id> HUMAN ONLY: promotion gate (needs a holdout row)"
 	@echo "make scorecard               per-session keep/repeat rates -> LOOP_SCORECARD.md"
 	@echo "make merge-gate BRANCH=curator/<session>   gated fast-forward merge of a curator branch"
 	@echo "KEPLER_RUNS_DIR=<dir> make backtest ...   log to <dir> instead of runs/ (adversary reruns)"
@@ -36,14 +41,14 @@ env:
 	$(PY) python -c "import lightgbm, pandas, numpy, sklearn, statsmodels, pyarrow; print('lightgbm', lightgbm.__version__); print('env ok')"
 
 data:
-	$(PY) python -m src.data
+	$(PY) python -m src.data --dataset $(DATASET)
 
 holdout:
-	$(PY) python -m src.data --cut-holdout
+	$(PY) python -m src.data --dataset $(DATASET) --cut-holdout
 
 backtest:
 	@if [ -z "$(MODEL)" ]; then echo "usage: make backtest MODEL=<name>"; exit 2; fi
-	$(PY) python -m src.backtest --model $(MODEL) --seeds $(SEEDS) --author $(AUTHOR) $(if $(PARENT),--parent $(PARENT),) $(if $(SESSION),--session $(SESSION),) $(if $(HYPOTHESIS),--hypothesis $(HYPOTHESIS),)
+	$(PY) python -m src.backtest --model $(MODEL) --dataset $(DATASET) --seeds $(SEEDS) --author $(AUTHOR) $(if $(PARENT),--parent $(PARENT),) $(if $(SESSION),--session $(SESSION),) $(if $(HYPOTHESIS),--hypothesis $(HYPOTHESIS),)
 
 report:
 ifeq ($(strip $(RUN)),)
@@ -54,12 +59,26 @@ endif
 
 score-holdout:
 	@if [ -z "$(MODEL)" ]; then echo "usage: make score-holdout MODEL=<name>"; exit 2; fi
-	$(PY) python -m src.score_holdout --model $(MODEL)
+	$(PY) python -m src.score_holdout --model $(MODEL) --dataset $(DATASET)
 
 verify-frozen:
 	@echo "--- diff vs v2-loop on frozen files (empty output = clean) ---"
 	@git diff v2-loop -- src/scorer.py src/report.py src/score_holdout.py
 	@$(PY) python tools/check_claude_diff.py v2-loop HEAD
+
+forecast:
+	@if [ -z "$(ASOF)" ]; then echo "usage: make forecast ASOF=<YYYY-MM-DD> [DATASET=<id>] [HORIZON=28]"; exit 2; fi
+	$(PY) python -m src.forecast --dataset $(DATASET) --asof $(ASOF) --horizon $(or $(HORIZON),28)
+
+evaluate:
+	$(PY) python -m src.evaluate --dataset $(DATASET)
+
+live-report:
+	$(PY) python tools/live_report.py --dataset $(DATASET)
+
+promote:
+	@if [ -z "$(BRANCH)" ]; then echo "usage: make promote BRANCH=exp/<run_id> [DATASET=<id>]   (HUMAN ONLY)"; exit 2; fi
+	$(PY) python tools/promote.py $(BRANCH) --dataset $(DATASET)
 
 scorecard:
 	$(PY) python tools/scorecard.py

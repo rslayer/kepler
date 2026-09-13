@@ -1,0 +1,15 @@
+{
+  "m5_ca1": {
+    "dataset": "m5_ca1",
+    "model_name": "lgbm_baseline",
+    "git_tag": "v1-harness",
+    "config_hash": "900159c6f3dd",
+    "backtest_run": "r033",
+    "backtest_wrmsse": 0.810828,
+    "holdout_wrmsse": null,
+    "holdout_note": "not yet scored on the m5_ca1 holdout; runs/holdout.csv row 1 is the v0 FOODS_3 subset. Human: make score-holdout MODEL=lgbm_baseline",
+    "promoted_at": "2026-09-13T05:28:45+00:00",
+    "promoted_by": "human (seed, SPEC_v3 Part B)",
+    "previous": null
+  }
+}
