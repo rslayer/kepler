@@ -143,9 +143,30 @@ class LGBMBaseline:
         return out
 
 
+# ----------------------------------------------------------------------- experiments
+# One class per experiment; each changes exactly one thing relative to its parent.
+
+
+class LGBMChristmasZero(LGBMBaseline):
+    """H031 (run r037, branch exp/r037; ported to the v3 contract): forecast 0 on Christmas
+    Day. The store is closed every 25 December (sales 0 on 2012-2015) but the 40-origin
+    training window never contains a Christmas, so the baseline forecasts a normal day
+    inside folds 2 and 3. Reads the adapter's `christmas` calendar flag."""
+
+    name = "lgbm_xmas0"
+
+    def extra_config(self) -> dict:
+        return {"postprocess": "christmas_zero"}
+
+    def postprocess(self, predict: pd.DataFrame, preds: np.ndarray) -> np.ndarray:
+        closed = predict["christmas"].to_numpy() == 1
+        return np.where(closed, 0.0, preds)
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
+    LGBMChristmasZero.name: LGBMChristmasZero,
 }
 
 
