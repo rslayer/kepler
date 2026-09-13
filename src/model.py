@@ -212,11 +212,26 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
         return model.predict(x_pred, num_iteration=model.best_iteration_)
 
 
+class LGBMRecipe2Tweedie(LGBMRecipe1Capacity):
+    """Ingredient 2: Tweedie objective (variance power 1.1) plus a per-series level-growth
+    feature, level_ratio_28_365 (last-28-day mean over last-365-day mean, at the origin).
+    The v0 lessons showed Tweedie's under-forecast is level growth between training and
+    forecast windows (ledger H027); the feature lets the model see it."""
+
+    name = "recipe2_tweedie"
+    PARAMS = {**LGBMRecipe1Capacity.PARAMS, "objective": "tweedie", "tweedie_variance_power": 1.1}
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + ["level_ratio_28_365"]
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
     LGBMChristmasZero.name: LGBMChristmasZero,
     LGBMRecipe1Capacity.name: LGBMRecipe1Capacity,
+    LGBMRecipe2Tweedie.name: LGBMRecipe2Tweedie,
 }
 
 
