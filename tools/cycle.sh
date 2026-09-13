@@ -74,6 +74,12 @@ print(f"{sid},{role},{ds},{st},{en},{it},{ot},{cost},{rc},{turns}")
 PY
   echo "--- $sid end $ended (exit $rc)"
   python3 -c "import json,sys; d=json.load(open('$json')); print((d.get('result') or '')[:1500])" 2>/dev/null > "$OUT/$sid.result.txt" || true
+  # a session that errored before doing any work (auth, CLI) aborts the whole cycle
+  if python3 -c "import json,sys; d=json.load(open('$json')); sys.exit(0 if d.get('is_error') and d.get('num_turns',0) <= 1 else 1)" 2>/dev/null; then
+    echo "ABORT: $sid failed before doing any work: $(cat "$OUT/$sid.result.txt")"
+    echo "       (if this is an auth error, run \`claude login\` in a terminal and relaunch)"
+    exit 5
+  fi
   # integrity after every session
   git checkout -q main
   make verify-frozen >/dev/null || { echo "ABORT: frozen files or Rules block changed after $sid"; exit 4; }
