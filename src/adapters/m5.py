@@ -346,6 +346,12 @@ class M5Adapter:
             "price_group": "dept_id",      # recipe ingredient 5: relative price within this group
             "series_flags": ["snap_own"],  # recipe ingredient 6: per-(series, date) flags
         }
-        return Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
-                       exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__,
-                       timeout_minutes=self.timeout_minutes)
+        ds = Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
+                     exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__,
+                     timeout_minutes=self.timeout_minutes)
+        # dense (series x exog day) snap_own, independent of which days have a listed price
+        xd = pd.DatetimeIndex(sorted(exog_date["date"].unique()))
+        snap_state = {stt: cal_idx[col].reindex(xd).fillna(0).to_numpy(dtype="int8") for stt, col in snap_cols.items()}
+        ds.series_date_matrices = {"snap_own": np.vstack([snap_state[stt] for stt in series["state_id"]])}
+        ds.series_date_matrices_dates = xd
+        return ds
