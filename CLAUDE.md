@@ -68,11 +68,11 @@ Harness notes (how the rules above map onto this repo):
   prints the keep rule (paired gain, no fold regresses, bias guardrail) and writes
   verdict=kept|discarded to runs/runs.csv and runs/detail/<run_id>.json.
 - Register a new model by adding a class to src/model.py and an entry in MODELS.
-  Registered on main: seasonal_naive, lgbm_baseline (WRMSSE 0.810828, run r033;
-  v1 harness, 8 folds x 3 seeds, wrmsse_spread 0.000172). The current best is r044
-  lgbm_xmas0_r3 (0.804061, spread 0.000604, kept vs r037), whose code lives on branch
-  exp/r044 on top of exp/r037 (lgbm_xmas0, 0.805456, kept and passed via r055); neither
-  branch is merged to main, so neither model is in MODELS on main.
+  Registered on main: seasonal_naive, lgbm_baseline (r033, WRMSSE 0.810828), lgbm_xmas0
+  (champion since 2026-09-13, champion/m5_ca1/v1, r037, WRMSSE 0.805456, spread
+  0.000128). Build on the champion. exp/r044 (lgbm_xmas0_r3, 0.804061, kept, adversary
+  INCONCLUSIVE) predates the v3 data contract and cannot be merged; its idea (ledger
+  H033, roll_mean_3) may be re-implemented on the champion as a new run.
 - Per-fold numbers for any run: make report RUN=<run_id>
 - Features are "as-of-origin": every sales-derived feature is evaluated once at the
   fold origin and held constant across the 28-day horizon. Read the LEAK-FREE CONTRACT
