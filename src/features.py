@@ -40,6 +40,7 @@ from .contract import Dataset
 
 LAGS = (7, 14, 28)
 ROLL_WINDOWS = (7, 28)
+TARGET_LAGS = (7, 14, 21, 28, 35)  # recipe ingredient 3; NaN where not yet observed at the origin
 HORIZON = 28
 MIN_HISTORY = max(max(LAGS), max(ROLL_WINDOWS))
 
@@ -201,6 +202,19 @@ def build_frame(
     if cols[-1] >= panel.price_matrix.shape[1]:
         raise ValueError("horizon runs past the snapshot's price coverage")
     frame[PRICE_COLUMN] = panel.price_matrix[:, cols].reshape(-1)
+
+    # --- recipe ingredient 3: target-relative lags. For horizon day h (1-based) and lag k
+    #     the source column is origin_pos + h - 1 - k, which is strictly before the origin
+    #     iff k >= h; otherwise the value is NaN (unavailable at the origin). Every read is
+    #     asserted < origin_pos.
+    for k in TARGET_LAGS:
+        col = np.full((n_series, horizon), np.nan, dtype=np.float32)
+        for h in range(1, horizon + 1):
+            src = origin_pos + h - 1 - k
+            if k >= h and src >= 0:
+                assert src < origin_pos, "target-relative lag would read at or after the origin"
+                col[:, h - 1] = panel.values[:, src]
+        frame[f"tlag_{k}"] = col.reshape(-1)
 
     if with_target:
         end_pos = origin_pos + horizon

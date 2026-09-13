@@ -226,12 +226,40 @@ class LGBMRecipe2Tweedie(LGBMRecipe1Capacity):
         return super().features + ["level_ratio_28_365"]
 
 
+class LGBMRecipe3Direct(LGBMRecipe2Tweedie):
+    """Ingredient 3: direct multi-horizon. One model per horizon week (h 1-7, 8-14, 15-21,
+    22-28), each fit on that week's rows with target-relative lags tlag_7..tlag_35, which
+    are defined only where the lagged day is strictly before the origin (k >= h). Week w
+    therefore sees lags >= 7w; the rest are all-NaN in its rows and carry nothing."""
+
+    name = "recipe3_direct"
+    WEEKS = ((1, 7), (8, 14), (15, 21), (22, 28))
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + [f"tlag_{k}" for k in (7, 14, 21, 28, 35)]
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "direct_weeks": [list(w) for w in self.WEEKS]}
+
+    def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
+        out = np.empty(len(predict), dtype=float)
+        th = train["horizon"].astype(int).to_numpy()
+        ph = predict["horizon"].astype(int).to_numpy()
+        for lo, hi in self.WEEKS:
+            tm = (th >= lo) & (th <= hi)
+            pm = (ph >= lo) & (ph <= hi)
+            out[pm] = super()._fit_predict(train[tm], predict[pm], seed)
+        return out
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
     LGBMChristmasZero.name: LGBMChristmasZero,
     LGBMRecipe1Capacity.name: LGBMRecipe1Capacity,
     LGBMRecipe2Tweedie.name: LGBMRecipe2Tweedie,
+    LGBMRecipe3Direct.name: LGBMRecipe3Direct,
 }
 
 
