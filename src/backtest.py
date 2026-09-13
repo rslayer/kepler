@@ -46,7 +46,7 @@ FINDINGS_DIR = ROOT / "findings"
 N_FOLDS = 8
 SEEDS = (42, 7, 123)  # every backtest fits once per seed per fold; metrics are logged as mean and spread
 FOLD_SPACING = 14  # days between consecutive fold origins; windows overlap by 14 days
-TIMEOUT_SECONDS = 20 * 60
+TIMEOUT_SECONDS = 20 * 60  # default; a Dataset may set timeout_minutes (m5_all: 90)
 
 RUN_COLUMNS = [
     "run_id", "timestamp", "git_commit", "model_name", "config_hash", "fold_count", "fold_spacing",
@@ -211,6 +211,7 @@ def run_backtest(
     sales, calendar, prices = scorer_frames(ds, origins[0])
     hierarchy = ds.roles.get("hierarchy") or []
     metric = HIER_KEY if hierarchy else "wrmsse"
+    timeout = int(getattr(ds, "timeout_minutes", TIMEOUT_SECONDS // 60)) * 60
 
     print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author}")
     print(f"snapshot: {len(panel.ids)} series, {len(panel.dates)} days, last {panel.last_date.date()}")
@@ -247,7 +248,7 @@ def run_backtest(
             metrics["seed"] = sd
             seed_folds[sd].append(metrics)
             seed_details.append(detail)
-            if time.time() - started > TIMEOUT_SECONDS:
+            if time.time() - started > timeout:
                 break
 
         done = [seed_folds[sd][-1] for sd in seeds if len(seed_folds[sd]) == i]
@@ -277,9 +278,9 @@ def run_backtest(
             f"wape={fold_mean['wape']:.6f} bias={fold_mean['bias']:+.6f}  "
             f"[{len(done)}/{len(seeds)} seeds, {elapsed:.1f}s]"
         )
-        if elapsed > TIMEOUT_SECONDS or len(done) < len(seeds):
+        if elapsed > timeout or len(done) < len(seeds):
             status = "timeout"
-            print(f"  exceeded {TIMEOUT_SECONDS}s budget - marking run as timeout")
+            print(f"  exceeded {timeout}s budget - marking run as timeout")
             break
 
     seconds = time.time() - started
