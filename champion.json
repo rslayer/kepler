@@ -6,8 +6,8 @@
     "config_hash": "900159c6f3dd",
     "backtest_run": "r033",
     "backtest_wrmsse": 0.810828,
-    "holdout_wrmsse": null,
-    "holdout_note": "not yet scored on the m5_ca1 holdout; runs/holdout.csv row 1 is the v0 FOODS_3 subset. Human: make score-holdout MODEL=lgbm_baseline",
+    "holdout_wrmsse": 0.788779,
+    "holdout_note": "scored 2026-09-13 by the human (make score-holdout MODEL=lgbm_baseline): 0.788779 on the m5_ca1 holdout 2016-03-28..04-24",
     "promoted_at": "2026-09-13T05:28:45+00:00",
     "promoted_by": "human (seed, SPEC_v3 Part B)",
     "previous": null
