@@ -11,9 +11,11 @@ from __future__ import annotations
 from . import m5
 
 ADAPTERS = {
-    "m5_ca1": m5.M5Adapter(dataset_id="m5_ca1", store_id="CA_1", dept_id=None),
+    # screening tier. Budget 60 min: v1 sized 20 min for a 300-tree baseline; the v4 recipe
+    # champion (early-stopped, up to 3000 rounds) needs ~20-40 min with JOBS=3 on this laptop.
+    "m5_ca1": m5.M5Adapter(dataset_id="m5_ca1", store_id="CA_1", dept_id=None, timeout_minutes=60),
     # all 10 stores, competition setup: visible d_1-d_1913, holdout = evaluation period d_1914-d_1941
-    "m5_all": m5.M5Adapter(dataset_id="m5_all", store_id=None, dept_id=None, layout="wide"),
+    "m5_all": m5.M5Adapter(dataset_id="m5_all", store_id=None, dept_id=None, layout="wide", timeout_minutes=180),
 }
 
 
