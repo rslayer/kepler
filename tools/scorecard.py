@@ -7,7 +7,9 @@ For each researcher session in runs/runs.csv prints
 and writes LOOP_SCORECARD.md (table, newest session last, plus one trend line).
 
 Definitions
-- runs: rows with author=researcher and status=ok in the session.
+- runs: rows with author=researcher and status=ok in the session on screening datasets;
+  confirm_runs are rows on confirmation datasets (tiers.json) and confirmed counts those
+  that are kept where the same model was also kept on the screen in the session.
 - kept: verdict=kept. v0 rows predate the verdict column; for them the findings file's
   own "Verdict: keep" line plus an existing exp/<run_id> branch is used, and rows with an
   empty session are assigned to the v0 session id below.
@@ -100,17 +102,28 @@ def compute() -> pd.DataFrame:
         old = pd.read_csv(io.StringIO(shown.stdout), dtype=str).fillna("")
         return dict(zip(old["hypothesis_id"], old["status"]))
 
+    tiers = {}
+    tp = ROOT / "tiers.json"
+    if tp.exists():
+        import json
+        tiers = {k: v["screen"] for k, v in json.loads(tp.read_text()).get("tiers", {}).items()}
+    confirm_sets = set(tiers)  # datasets that are confirmation tiers
+
     rows = []
     for session, g in res.groupby("session", sort=True):
         ok = g[g["status"] == "ok"]
+        conf = ok[ok["dataset"].isin(confirm_sets)]
+        ok = ok[~ok["dataset"].isin(confirm_sets)]  # screening runs drive the loop metrics
         n = len(ok)
         kept = int(ok["kept_flag"].sum())
+        confirmed = int(sum(1 for _, r in conf.iterrows() if r["kept_flag"] and
+                            ((ok["model_name"] == r["model_name"]) & ok["kept_flag"]).any()))
         status_at_start = ledger_status_at(g["ts"].min(), g["dataset"].iloc[0])
         repeats = sum(1 for h in ok["hyp"] if h and status_at_start.get(h) in ("discarded", "kept"))
         wall = (g["ts"].max() - g["ts"].min()).total_seconds() / 60 if g["ts"].notna().any() else float("nan")
         best = pd.to_numeric(ok["wrmsse"], errors="coerce").min()
         rows.append({
-            "session": session, "runs": n, "kept": kept,
+            "session": session, "runs": n, "kept": kept, "confirm_runs": len(conf), "confirmed": confirmed,
             "keep_rate": kept / n if n else 0.0,
             "runs_per_kept": (n / kept) if kept else float("inf"),
             "repeats": repeats, "repeat_rate": repeats / n if n else 0.0,
@@ -140,10 +153,10 @@ def main() -> int:
     print(trend)
     md = ["# LOOP SCORECARD", "", "Per researcher session, computed by `tools/scorecard.py` from runs/runs.csv and",
           "hypotheses/ledger.csv. Definitions in the script docstring. Newest session last.", "",
-          "| session | runs | kept | keep_rate | runs_per_kept | repeats | repeat_rate | best_wrmsse | wall_minutes |",
-          "|---|---|---|---|---|---|---|---|---|"]
+          "| session | runs | kept | confirm_runs | confirmed | keep_rate | runs_per_kept | repeats | repeat_rate | best_wrmsse | wall_minutes |",
+          "|---|---|---|---|---|---|---|---|---|---|---|"]
     for _, r in show.iterrows():
-        md.append(f"| {r.session} | {r.runs} | {r.kept} | {r.keep_rate:.2f} | {r.runs_per_kept} | {r.repeats} | "
+        md.append(f"| {r.session} | {r.runs} | {r.kept} | {r.confirm_runs} | {r.confirmed} | {r.keep_rate:.2f} | {r.runs_per_kept} | {r.repeats} | "
                   f"{r.repeat_rate:.2f} | {r.best_wrmsse:.6f} | {r.wall_minutes:.1f} |")
     md += ["", trend, ""]
     OUT.write_text("\n".join(md))

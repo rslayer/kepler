@@ -35,6 +35,11 @@ Loop:
 6. Write the findings file. Log the run. Update the ledger row's status,
    last_run, sessions, and evidence.
 7. If kept, commit on exp/<run_id>. If discarded, revert the change.
+7a. If the harness printed verdict=kept on the screening dataset (m5_ca1), run the
+   same model once more with DATASET=m5_all PARENT=<the champion's m5_all run> and
+   the same SESSION and HYPOTHESIS. The result is kept only if BOTH verdicts are
+   kept; log both runs and report both in the findings file. A m5_all backtest takes
+   about 45 minutes and counts against the three-hour cap.
 8. Repeat until told to stop or three hours have elapsed.
 9. Before stopping, append any confirmed finding to datasets/<DATASET>/LESSONS.md
    (or LESSONS.md if it is about the loop or the metric rather than the data), one

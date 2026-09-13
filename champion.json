@@ -22,5 +22,19 @@
       "promoted_by": "human (seed, SPEC_v3 Part B)",
       "previous": null
     }
+  },
+  "m5_all": {
+    "dataset": "m5_all",
+    "model_name": "lgbm_baseline",
+    "git_tag": "v4/part-a",
+    "config_hash": "900159c6f3dd",
+    "backtest_run": "r063",
+    "backtest_wrmsse": 0.86167,
+    "backtest_wrmsse_hier": 0.785019,
+    "holdout_wrmsse": null,
+    "holdout_note": "yardstick not yet scored; human: make score-holdout MODEL=lgbm_baseline DATASET=m5_all (one shot, ever)",
+    "promoted_at": null,
+    "promoted_by": "human (seed, SPEC_v4 Part B)",
+    "previous": null
   }
 }
