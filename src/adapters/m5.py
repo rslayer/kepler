@@ -263,10 +263,16 @@ class M5Adapter:
         pm_w[pk[ok].astype(int).to_numpy(), pw[ok].astype(int).to_numpy()] = prices.loc[ok, "sell_price"].to_numpy(dtype="float32")
         price_matrix = pm_w[:, [wk_pos[w] for w in wk_of_day]]
         # long exog_series is required by the contract; keep it lean (categorical id, float32)
+        # SNAP for the series' own state as a (series x exog day) int8 matrix
+        snap_cols = {"CA": "snap_CA", "TX": "snap_TX", "WI": "snap_WI"}
+        snap_state = {stt: exog_date.set_index("date").loc[exog_dates, snap_cols[stt]].to_numpy(dtype="int8")
+                      for stt in snap_cols}
+        snap_own = np.vstack([snap_state[stt] for stt in series["state_id"]])
         exog_series = pd.DataFrame({
             "series_id": pd.Categorical(np.repeat(ids, len(exog_dates)), categories=ids),
             "date": np.tile(exog_dates.to_numpy(), n),
             "sell_price": price_matrix.reshape(-1),
+            "snap_own": snap_own.reshape(-1),
         })
         # rows with no listed price are absent in the long layout; drop NaN here too
         exog_series = exog_series[exog_series["sell_price"].notna()].reset_index(drop=True)
@@ -279,12 +285,15 @@ class M5Adapter:
             "hierarchy": [[], ["state_id"], ["store_id"], ["cat_id"], ["dept_id"],
                           ["state_id", "cat_id"], ["state_id", "dept_id"], ["store_id", "cat_id"],
                           ["store_id", "dept_id"], ["item_id"], ["item_id", "state_id"], ["item_id", "store_id"]],
+            "price_group": "dept_id",
+            "series_flags": ["snap_own"],
         }
         ds = Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
                      exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__,
                      timeout_minutes=self.timeout_minutes)
         ds.price_matrix = price_matrix  # optional fast path for features.Panel (aligned to series order, exog dates)
         ds.price_matrix_dates = exog_dates
+        ds.series_date_matrices = {"snap_own": snap_own}  # same alignment
         return ds
 
     def load(self, with_holdout: bool = False) -> Dataset:
@@ -316,12 +325,22 @@ class M5Adapter:
         px = prices.merge(series[["series_id", "item_id"]], on="item_id", how="inner")
         px = px.merge(wk, on="wm_yr_wk", how="inner")
         exog_series = px[["series_id", "date", "sell_price"]].sort_values(["series_id", "date"]).reset_index(drop=True)
+        # SNAP for the series' own state (recipe ingredient 6); one state in this layout
+        st = series.set_index("series_id")["state_id"]
+        snap_cols = {"CA": "snap_CA", "TX": "snap_TX", "WI": "snap_WI"}
+        snap_by_date = calendar.set_index("date")
+        exog_series["snap_own"] = [
+            int(snap_by_date.at[d, snap_cols[st[sid]]]) for sid, d in zip(exog_series["series_id"], exog_series["date"])
+        ] if len(exog_series) < 2_000_000 else 0
+        exog_series["snap_own"] = exog_series["snap_own"].astype("int8")
 
         roles = {
             "calendar_flags": ["snap_CA", "event_flag"],
             "price": "sell_price",
             "weight_price": "sell_price",
             "categoricals": ["item_id", "store_id"],
+            "price_group": "dept_id",      # recipe ingredient 5: relative price within this group
+            "series_flags": ["snap_own"],  # recipe ingredient 6: per-(series, date) flags
         }
         return Dataset(dataset_id=self.dataset_id, panel=panel, series=series, exog_date=exog_date,
                        exog_series=exog_series, roles=roles, horizon=HOLDOUT_DAYS, notes=__doc__,
