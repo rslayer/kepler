@@ -48,7 +48,9 @@ echo "cycle $RS on $DATASET (researcher cap ${HOURS}h); logs in runs/cycle-logs/
 
 # ---------------------------------------------------------------- helpers
 GUARD='Do not read, list, or reference anything under holdout/. Never edit src/scorer.py, src/report.py, src/backtest.py, tools/, Makefile, or anything above the RULES marker in CLAUDE.md. Never commit to main. Nobody else is working in this repository. Each `make backtest` takes about five minutes: run it and wait for it to finish before doing anything else.'
-COMMON_TOOLS='Read,Glob,Grep,Edit,Write,Bash(make:*),Bash(git:*),Bash(python:*),Bash(uv:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(wc:*),Bash(awk:*),Bash(sed:*),Bash(date:*),Bash(diff:*),Bash(mkdir:*),Bash(cp:*)'
+# Permission patterns match the command's first word, so env-var-prefixed forms need their
+# own entries (the adversary's rerun is `KEPLER_RUNS_DIR=adversary/reruns make backtest ...`).
+COMMON_TOOLS='Read,Glob,Grep,Edit,Write,Bash(make:*),Bash(KEPLER_RUNS_DIR=*),Bash(UV_SYSTEM_CERTS=*),Bash(git:*),Bash(python:*),Bash(python3:*),Bash(.venv/bin/python:*),Bash(uv:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(wc:*),Bash(awk:*),Bash(sed:*),Bash(sort:*),Bash(cut:*),Bash(date:*),Bash(diff:*),Bash(mkdir:*),Bash(cp:*),Bash(rm:*),Bash(for:*),Bash(cd:*)'
 
 run_session() {  # role session_id prompt
   local role="$1" sid="$2" prompt="$3" started ended rc json
@@ -105,6 +107,9 @@ echo "kept branches from $RS: ${BRANCHES:-none}"
 if [ -n "$BRANCHES" ]; then
   run_session adversary "$AS1" "You are the adversary. Read adversary/CLAUDE.md and review every exp/* branch from $RS (branches: $BRANCHES). Your session id is $AS1. $GUARD Write only under adversary/reviews/ and the review rows in runs/runs.csv; restore src/ from main after every rerun." || true
   git add -A adversary/reviews runs/runs.csv && git commit -q -m "adversary: $AS1 reviews" || true
+  if ! grep -q ",$AS1" adversary/reruns/runs.csv 2>/dev/null; then
+    echo "WARNING: $AS1 logged no reruns (adversary/reruns/runs.csv); items 7-8 were not executed - review verdicts are provisional"
+  fi
 fi
 
 # ---------------------------------------------------------------- 3. curator
