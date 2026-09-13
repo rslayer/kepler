@@ -9,8 +9,12 @@ Promote the branch's kept run to champion if and only if ALL of:
      (author=human, status=ok, model_name=exp/<run_id>).
   3. frozen files and the CLAUDE.md Rules block are unchanged on the branch vs the frozen tag.
   4. runs/holdout.csv has a row for (dataset, model) - produced by the human with
-     `make score-holdout` - and its wrmsse is strictly below the champion's holdout_wrmsse.
-     This tool never runs the holdout.
+     `make score-holdout` - and its wrmsse is NOT WORSE than the champion's holdout_wrmsse.
+     Ties promote (decided by the human 2026-09-13): the challenger already beat the
+     champion on 24 backtest fits and survived the adversary; the holdout's job is to catch
+     a backtest gain that does not generalise, and an exact tie is not that. Strict "better"
+     would permanently block any calendar-event fix whose event lies outside the fixed
+     28-day holdout window. This tool never runs the holdout.
   5. the branch touches only src/features.py, src/model.py, findings/, runs/, hypotheses/,
      LESSONS.md, datasets/ - never tools/, Makefile, instruction files, scorer, backtest -
      and merges into main without conflict.
@@ -128,9 +132,10 @@ def main(argv: list[str]) -> int:
         return refuse(4, f"champion {champ['model_name']} has no holdout score for {dataset}; human must run "
                          f"`make score-holdout MODEL={champ['model_name']} DATASET={dataset}` first")
     hold = float(mine[-1]["wrmsse"])
-    if not hold < float(champ["holdout_wrmsse"]):
-        return refuse(4, f"holdout {hold:.6f} is not below champion's {float(champ['holdout_wrmsse']):.6f}")
-    print(f"condition 4 ok: holdout {hold:.6f} < champion {float(champ['holdout_wrmsse']):.6f}")
+    if hold > float(champ["holdout_wrmsse"]):
+        return refuse(4, f"holdout {hold:.6f} is worse than champion's {float(champ['holdout_wrmsse']):.6f}")
+    rel = "equals" if hold == float(champ["holdout_wrmsse"]) else "<"
+    print(f"condition 4 ok: holdout {hold:.6f} {rel} champion {float(champ['holdout_wrmsse']):.6f} (not worse)")
 
     # 5. touched paths + clean merge
     base = git("merge-base", "main", branch).stdout.strip()

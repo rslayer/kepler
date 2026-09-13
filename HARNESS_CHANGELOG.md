@@ -2,6 +2,13 @@
 
 ## v3 — 2026-09-13 (tag `v3-engine`, SPEC_v3_engine.md)
 
+**Amendment (2026-09-13, human decision):** promotion condition 4 is "holdout not worse
+than the champion" (ties promote), not "strictly better". First case: exp/r037's
+Christmas-zero fix scored exactly the champion's 0.788779 on a holdout window that contains
+no 25 December. Promoted as champion/m5_ca1/v1. Lesson for v4: a single fixed 28-day
+holdout cannot adjudicate seasonal fixes; the live scoreboard is the better promotion
+instrument once it spans a year of as-of dates.
+
 v2 made the loop learn; v3 makes it an engine. Data contract (`src/contract.py`): panel
 (series_id, date, y), series attributes, exog_date, exog_series, and roles; adapters
 (`src/adapters/m5.py`) own every dataset-specific name and the download/snapshot/holdout
