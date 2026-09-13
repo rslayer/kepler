@@ -297,6 +297,28 @@ class LGBMRecipe6Calendar(LGBMRecipe5Price):
         return super().features + self.CAL_EXTRA
 
 
+# L2-objective variants of ingredients 3-6 (fallback chain on the ingredient-1 base): the
+# Tweedie base under-forecast by 4-5% on m5_ca1 and every feature ingredient improved WAPE
+# but not WRMSSE on top of it. Same features, same early stopping, L2 loss.
+_L2 = {**LGBMRecipe1Capacity.PARAMS}
+
+
+class LGBMRecipe3DirectL2(LGBMRecipe3Direct):
+    name = "recipe3_direct_l2"; PARAMS = _L2
+
+
+class LGBMRecipe4RollingL2(LGBMRecipe4Rolling):
+    name = "recipe4_rolling_l2"; PARAMS = _L2
+
+
+class LGBMRecipe5PriceL2(LGBMRecipe5Price):
+    name = "recipe5_price_l2"; PARAMS = _L2
+
+
+class LGBMRecipe6CalendarL2(LGBMRecipe6Calendar):
+    name = "recipe6_calendar_l2"; PARAMS = _L2
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -307,6 +329,10 @@ MODELS: dict[str, type] = {
     LGBMRecipe4Rolling.name: LGBMRecipe4Rolling,
     LGBMRecipe5Price.name: LGBMRecipe5Price,
     LGBMRecipe6Calendar.name: LGBMRecipe6Calendar,
+    LGBMRecipe3DirectL2.name: LGBMRecipe3DirectL2,
+    LGBMRecipe4RollingL2.name: LGBMRecipe4RollingL2,
+    LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
+    LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
 }
 
 
