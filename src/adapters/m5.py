@@ -326,13 +326,17 @@ class M5Adapter:
         px = px.merge(wk, on="wm_yr_wk", how="inner")
         exog_series = px[["series_id", "date", "sell_price"]].sort_values(["series_id", "date"]).reset_index(drop=True)
         # SNAP for the series' own state (recipe ingredient 6); one state in this layout
+        import numpy as np
         st = series.set_index("series_id")["state_id"]
         snap_cols = {"CA": "snap_CA", "TX": "snap_TX", "WI": "snap_WI"}
-        snap_by_date = calendar.set_index("date")
-        exog_series["snap_own"] = [
-            int(snap_by_date.at[d, snap_cols[st[sid]]]) for sid, d in zip(exog_series["series_id"], exog_series["date"])
-        ] if len(exog_series) < 2_000_000 else 0
-        exog_series["snap_own"] = exog_series["snap_own"].astype("int8")
+        cal_idx = calendar.set_index("date")
+        row_state = exog_series["series_id"].map(st).to_numpy()
+        snap_own = np.zeros(len(exog_series), dtype="int8")
+        for stt, col in snap_cols.items():
+            mask = row_state == stt
+            if mask.any():
+                snap_own[mask] = cal_idx[col].reindex(exog_series.loc[mask, "date"]).fillna(0).to_numpy(dtype="int8")
+        exog_series["snap_own"] = snap_own
 
         roles = {
             "calendar_flags": ["snap_CA", "event_flag"],
