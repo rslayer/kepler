@@ -190,6 +190,13 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
     def extra_config(self) -> dict:
         return {**super().extra_config(), "early_stopping": self.EARLY_STOPPING_ROUNDS, "validation": "newest_origin"}
 
+    CALIBRATE = False
+
+    def _calibrate(self, va_frame: pd.DataFrame, va_pred: np.ndarray, pred_frame: pd.DataFrame, pred: np.ndarray) -> np.ndarray:
+        """Post-fit adjustment from the validation window (the newest simulated origin's rows =
+        the 28 days just before the fold origin). Leak-free: everything is before the origin."""
+        return pred
+
     def _row_weights(self, train: pd.DataFrame):
         """Per-row sample weights for the fit, or None. Called on the exact frame each
         model is fit on (after the direct per-week split), so subclasses may derive the
@@ -222,7 +229,11 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
         model.fit(x_tr, y_tr, eval_set=[(x_va, y_va)], categorical_feature=categorical,
                   callbacks=[lgb.early_stopping(self.EARLY_STOPPING_ROUNDS, verbose=False)], **fit_kw)
         self.last_best_iteration = int(model.best_iteration_ or params["n_estimators"])
-        return model.predict(x_pred, num_iteration=model.best_iteration_)
+        out = model.predict(x_pred, num_iteration=model.best_iteration_)
+        if self.CALIBRATE:  # subclass hook; off by default so every other model is untouched
+            va_pred = model.predict(x_va, num_iteration=model.best_iteration_)
+            out = self._calibrate(train[val_mask], va_pred, predict, out)
+        return out
 
 
 class LGBMRecipe2Tweedie(LGBMRecipe1Capacity):
@@ -424,6 +435,39 @@ class LGBMRecipeScaledW(LGBMRecipeScaled):
         return self._scale(train)
 
 
+class LGBMRecipeCalib(LGBMRecipeBag3):
+    """Bias fix 4: per store x department calibration on the bagged recipe. Each fitted
+    model's predictions on its early-stopping validation window (the 28 days just before
+    the origin; for the direct per-week models, that week's slice of it) are compared with
+    the actuals per (store, department); the forecast is multiplied by
+    (sum actual + w) / (sum prediction + w), which shrinks toward 1 for small groups, and is
+    clipped to [0.8, 1.25]. Costs no extra fit. Targets the calm-month aggregate-level
+    under-forecast (r107 folds 4-7) that the ratio target (r109) and momentum features
+    (r110) did not fix."""
+
+    name = "recipe_calib"
+    CALIBRATE = True
+    GROUP = ("store_id", "dept_id")
+    CLIP = (0.8, 1.25)
+    PRIOR_WEIGHT = 200.0  # units of predicted volume over the window
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "calibration": {"group": list(self.GROUP), "window": "validation_origin",
+                                                          "clip": list(self.CLIP), "prior_weight": self.PRIOR_WEIGHT}}
+
+    def _calibrate(self, va_frame, va_pred, pred_frame, pred):
+        keys = list(self.GROUP)
+        g = pd.DataFrame({"y": va_frame["y"].to_numpy(dtype=float), "p": np.asarray(va_pred, dtype=float)})
+        for k in keys:
+            g[k] = va_frame[k].astype(str).to_numpy()
+        agg = g.groupby(keys, sort=False)[["y", "p"]].sum()
+        factor = ((agg["y"] + self.PRIOR_WEIGHT) / (agg["p"] + self.PRIOR_WEIGHT)).clip(*self.CLIP)
+        idx = pd.MultiIndex.from_arrays([pred_frame[k].astype(str).to_numpy() for k in keys], names=keys)
+        f = factor.reindex(idx).fillna(1.0).to_numpy()
+        self.last_calibration = {"/".join(k): round(v, 4) for k, v in factor.items()}
+        return pred * f
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -442,6 +486,7 @@ MODELS: dict[str, type] = {
     LGBMRecipeScaled.name: LGBMRecipeScaled,
     LGBMRecipeMomentum.name: LGBMRecipeMomentum,
     LGBMRecipeScaledW.name: LGBMRecipeScaledW,
+    LGBMRecipeCalib.name: LGBMRecipeCalib,
 
 
     LGBMXmasThanksgivingDept.name: LGBMXmasThanksgivingDept,
