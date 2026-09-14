@@ -17,7 +17,7 @@ ADAPTERS = {
     # all 10 stores, competition setup: visible d_1-d_1913, holdout = evaluation period d_1914-d_1941
     "m5_all": m5.M5Adapter(dataset_id="m5_all", store_id=None, dept_id=None, layout="wide", timeout_minutes=180),
     # hierarchical screening tier: one store per state, all 12 levels, competition setup
-    "m5_3": m5.M5Adapter(dataset_id="m5_3", store_id=None, dept_id=None, layout="wide", timeout_minutes=120,
+    "m5_3": m5.M5Adapter(dataset_id="m5_3", store_id=None, dept_id=None, layout="wide", timeout_minutes=150,
                          store_ids=["CA_1", "TX_1", "WI_1"]),  # 120 min: a bagged recipe is ~90 min here
 }
 
