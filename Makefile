@@ -10,6 +10,7 @@ DATASET ?= m5_3
 RUN ?=
 SEEDS ?= 42,7,123
 JOBS ?= 1
+BAG ?= on
 PARENT ?=
 SESSION ?=
 HYPOTHESIS ?=
@@ -24,6 +25,7 @@ help:
 	@echo "make backtest MODEL=<name>   rolling-origin backtest (8 folds x 3 seeds), appends to runs/runs.csv"
 	@echo "  ... SEEDS=42,7,123         override the seed list"
 	@echo "  ... JOBS=3                 parallel worker processes for the fits (results identical)"
+	@echo "  ... BAG=off                score seeds separately (v1-v4 behaviour); default on = seed-averaged forecast"
 	@echo "  ... PARENT=<run_id>        evaluate the keep rule against a v1 run; writes verdict"
 	@echo "  ... SESSION=<id> HYPOTHESIS=<H###>   required when AUTHOR=researcher"
 	@echo "make report                  table of all runs sorted by WRMSSE"
@@ -50,7 +52,7 @@ holdout:
 
 backtest:
 	@if [ -z "$(MODEL)" ]; then echo "usage: make backtest MODEL=<name>"; exit 2; fi
-	$(PY) python -m src.backtest --model $(MODEL) --dataset $(DATASET) --seeds $(SEEDS) --jobs $(JOBS) --author $(AUTHOR) $(if $(PARENT),--parent $(PARENT),) $(if $(SESSION),--session $(SESSION),) $(if $(HYPOTHESIS),--hypothesis $(HYPOTHESIS),)
+	$(PY) python -m src.backtest --model $(MODEL) --dataset $(DATASET) --seeds $(SEEDS) --jobs $(JOBS) --bag-seeds $(BAG) --author $(AUTHOR) $(if $(PARENT),--parent $(PARENT),) $(if $(SESSION),--session $(SESSION),) $(if $(HYPOTHESIS),--hypothesis $(HYPOTHESIS),)
 
 report:
 ifeq ($(strip $(RUN)),)
