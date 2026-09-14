@@ -1,5 +1,44 @@
 # Harness changelog
 
+## v4 (Parts A–C, E partial) — 2026-09-14 (tag `v4-partc`, SPEC_v4_quality.md)
+
+**Part A.** `m5_all` adapter (all 10 stores, 30,490 series; compact wide snapshot; the
+competition's evaluation period d_1914–1941 from sales_train_evaluation.csv is the holdout,
+visible data untouched). `src/scorer_hier.py` — the 12-level WRMSSE (frozen from this tag;
+its item-store level equals src/scorer.py exactly). `wrmsse_hier` / `wrmsse_hier_spread` in
+runs.csv; the keep rule uses `wrmsse_hier` on hierarchical datasets (detail JSON records
+`metric`). Timeout is a dataset property (m5_ca1 60 min, m5_3 60, m5_all 180). The
+organisers' "Scores and Ranks" file is in datasets/m5_all/: winner 0.5204, rank 10 0.5475,
+rank 50 0.576; benchmarks sNaive 0.847, ES_bu 0.671; top-50 item-store level 0.875–0.912.
+Baselines on m5_all: seasonal_naive hier 1.004; lgbm_baseline hier **0.785** (item level
+0.862), 42 min alone, deterministic (r083 = r085).
+**Part B.** Two-tier harness: tiers.json, CLAUDE.md step 7a, promote condition 1b (same
+model kept on the screen in the same session), scorecard tier columns. **The screen is
+`m5_3`** (CA_1, TX_1, WI_1; 9,147 series; all 12 levels; naive 0.896, baseline 0.671,
+~10–18 min per run). m5_ca1 is retired to history: its one-store item-level metric rejected
+every recipe ingredient that then won on the real metric.
+**Part C.** The M5 recipe, one ingredient per run on m5_ca1 (findings r086–r097, ledger
+H111–H124): capacity 0.8081, +Tweedie 0.8177 (bias −4.5%), +direct multi-horizon 0.8105,
++rolling 0.8115, +price 0.8111, +calendar 0.8125; the L2 chain 0.8117 → 0.8113. None beat
+the champion's 0.8055 at item level. On **m5_all the full L2 recipe scores hier 0.698 vs
+0.785, better on all 8 folds, kept (r101)**; on the m5_3 screen 0.651 vs 0.671, a real gain
+discarded by a bar set by its own seed spread (0.011; on m5_all 0.016 — ten times the
+baseline's). Deviation from the spec: capacity is lr 0.05 / 1500 rounds, not 0.02 / 3000
+(budget). Ingredient 7 (per-store models) not yet run. Part C's acceptance (recipe kept on
+both tiers, yardstick < 0.65, promoted to champion/m5_all/v1) is NOT met yet: the screen
+verdict is blocked by seed noise, and the yardstick is the human's one shot. Next levers, in
+order: seed-averaged forecasts (shrinks the bar), bias/scale correction, per-store models,
+event-effect features, recency-weighted long history.
+**Part E (partial).** `--jobs N` parallel (fold, seed) fits, results identical to sequential
+(verified on m5_ca1); parallel fits honour the budget; tools/cloud/README.md with measured
+runtimes and the one-box setup. Speedup not yet measured on an idle machine.
+**Field notes.** The worktree's harness-owner runs were renumbered r080–r102 at merge (the
+loop's cycle-2 rows r060–r079 are canonical; mapping in runs/v4_run_id_map.json). A
+keep-rule bug (parent mean read on `wrmsse` instead of the selected metric) crashed the first
+m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must include
+env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
+session logs no reruns.
+
 ## v3 field notes — cycle 2 (2026-09-13), first headless cycle
 
 Run by `tools/cycle.sh m5_ca1 3` after the human renewed the CLI login (the first attempt
