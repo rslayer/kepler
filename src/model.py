@@ -386,16 +386,64 @@ class LGBMRecipeScaled(LGBMRecipeBag3):
         return super()._fit_predict(scaled, predict, seed) * self._scale(predict)
 
 
-class LGBMRecipeMomentum(LGBMRecipeScaled):
+class LGBMRecipeMomentum(LGBMRecipeBag3):
     """Bias fix 2: momentum ratios at the origin (7/28, 28/56, 28/180-day level ratios) on
-    top of the ratio target, so the model can lift or lower a forecast for a series whose
-    level is moving."""
+    the bagged recipe, so the model can lift or lower a forecast for a series whose level
+    is moving. (First planned on the ratio target; that base lost, r109.)"""
 
     name = "recipe_momentum"
 
     @property
     def features(self) -> list[str]:
         return super().features + ["mom_7_28", "mom_28_56", "mom_28_180"]
+
+
+class LGBMRecipeScaledW(LGBMRecipeScaled):
+    """Bias fix 1b: the ratio target with level-proportional sample weights (weight = the
+    scale), so the L2 loss on ratios is a level-weighted loss and high-volume series keep
+    their importance — the unweighted ratio target (r109) let low-volume series' noisy
+    ratios dominate and over-forecast by +2.7%."""
+
+    name = "recipe_scaled_w"
+
+    def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
+        import lightgbm as lgb
+        s_tr = self._scale(train)
+        scaled = train.assign(y=train["y"].to_numpy(dtype=float) / s_tr)
+        self._sample_weight = s_tr
+        try:
+            return LGBMRecipe1Capacity._fit_predict_weighted(self, scaled, predict, seed, s_tr) * self._scale(predict)
+        finally:
+            self._sample_weight = None
+
+
+def _fit_predict_weighted(self, train, predict, seed, weight):
+    """LGBMRecipe1Capacity._fit_predict with per-row sample weights (bag-aware via Bag3)."""
+    import lightgbm as lgb
+    preds = []
+    for k in range(getattr(self, "BAG", 1)):
+        sd = seed + 1000 * k
+        params = dict(self.PARAMS); params.update(random_state=sd, seed=sd, bagging_seed=sd, feature_fraction_seed=sd)
+        features = self.features
+        categorical = [c for c in features if c in CATEGORICAL_COLUMNS]
+        origin_of_row = train["date"] - pd.to_timedelta(train["horizon"].astype(int) - 1, unit="D")
+        val_mask = (origin_of_row == origin_of_row.max()).to_numpy()
+        x_all = train[features]
+        x_tr, y_tr, w_tr = x_all[~val_mask], train["y"][~val_mask], weight[~val_mask]
+        x_va, y_va, w_va = x_all[val_mask], train["y"][val_mask], weight[val_mask]
+        x_pred = predict[features].copy()
+        for col in categorical:
+            cats = x_tr[col].cat.categories
+            x_va = x_va.assign(**{col: pd.Categorical(x_va[col], categories=cats)})
+            x_pred[col] = pd.Categorical(x_pred[col], categories=cats)
+        model = lgb.LGBMRegressor(**params)
+        model.fit(x_tr, y_tr, sample_weight=w_tr, eval_set=[(x_va, y_va)], eval_sample_weight=[w_va],
+                  categorical_feature=categorical, callbacks=[lgb.early_stopping(self.EARLY_STOPPING_ROUNDS, verbose=False)])
+        preds.append(model.predict(x_pred, num_iteration=model.best_iteration_))
+    return np.mean(preds, axis=0)
+
+
+LGBMRecipe1Capacity._fit_predict_weighted = _fit_predict_weighted
 
 
 MODELS: dict[str, type] = {
@@ -415,6 +463,7 @@ MODELS: dict[str, type] = {
     LGBMRecipeBag3.name: LGBMRecipeBag3,
     LGBMRecipeScaled.name: LGBMRecipeScaled,
     LGBMRecipeMomentum.name: LGBMRecipeMomentum,
+    LGBMRecipeScaledW.name: LGBMRecipeScaledW,
 
 
     LGBMXmasThanksgivingDept.name: LGBMXmasThanksgivingDept,
