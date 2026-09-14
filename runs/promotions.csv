@@ -1,2 +1,3 @@
 timestamp,dataset,from_run,to_run,from_wrmsse,to_wrmsse,holdout_from,holdout_to,tag,promoted_by
 2026-09-13T13:16:21+00:00,m5_ca1,r033,r037,0.810828,0.805456,0.788779,0.788779,champion/m5_ca1/v1,human
+2026-09-14T01:31:46+00:00,m5_ca1,r037,r060,0.805456,0.804787,0.788779,0.788779,champion/m5_ca1/v2,human
