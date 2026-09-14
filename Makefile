@@ -29,7 +29,7 @@ help:
 	@echo "make report                  table of all runs sorted by WRMSSE"
 	@echo "make report RUN=<run_id>     error breakdown for one run"
 	@echo "make score-holdout MODEL=<n> HUMAN ONLY: one shot against holdout/"
-	@echo "make verify-frozen           diff frozen files against tag v3-engine + CLAUDE.md Rules-block integrity"
+	@echo "make verify-frozen           diff frozen files against tag v4-partc + CLAUDE.md Rules-block integrity"
 	@echo "make forecast ASOF=<date>    champion forecast -> forecasts/<dataset>/<asof>/"
 	@echo "make evaluate                score past forecasts whose actuals exist -> runs/live.csv"
 	@echo "make live-report             live WRMSSE per champion vs its backtest"
@@ -64,9 +64,9 @@ score-holdout:
 	$(PY) python -m src.score_holdout --model $(MODEL) --dataset $(DATASET)
 
 verify-frozen:
-	@echo "--- diff vs v3-engine on frozen files (empty output = clean) ---"
-	@git diff v3-engine -- src/scorer.py src/report.py src/score_holdout.py
-	@$(PY) python tools/check_claude_diff.py v3-engine HEAD
+	@echo "--- diff vs v4-partc on frozen files (empty output = clean) ---"
+	@git diff v4-partc -- src/scorer.py src/report.py src/score_holdout.py src/scorer_hier.py
+	@$(PY) python tools/check_claude_diff.py v4-partc HEAD
 
 forecast:
 	@if [ -z "$(ASOF)" ]; then echo "usage: make forecast ASOF=<YYYY-MM-DD> [DATASET=<id>] [HORIZON=28]"; exit 2; fi

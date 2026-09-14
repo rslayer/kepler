@@ -22,6 +22,7 @@
 /runs/holdout.csv @rslayer
 /runs/promotions.csv @rslayer
 /champion.json    @rslayer
+/tiers.json       @rslayer
 
 /src/score_holdout.py @rslayer
 
