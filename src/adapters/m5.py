@@ -68,7 +68,7 @@ def verify_manifest(directory: Path, files: tuple[str, ...]) -> None:
 
 class M5Adapter:
     def __init__(self, dataset_id: str, store_id: str | None, dept_id: str | None, layout: str = "long",
-                 timeout_minutes: int = 20):
+                 timeout_minutes: int = 20, store_ids: list[str] | None = None):
         """layout="long": v0-v3 snapshot (long sales.parquet; holdout cut from the snapshot).
         layout="wide": compact wide sales.parquet (one row per series, one int16 column per
         day) and the holdout taken from sales_train_evaluation.csv's 28 extra days
@@ -79,6 +79,7 @@ class M5Adapter:
         self.dept_id = dept_id
         self.layout = layout
         self.timeout_minutes = timeout_minutes
+        self.store_ids = store_ids  # a subset of stores (wide layout); None = store_id filter or all
         self.raw = ROOT / "data" / dataset_id / "raw"
         self.snapshot_dir = ROOT / "data" / dataset_id / "snapshot"
         self.holdout_dir = ROOT / "holdout" / dataset_id
@@ -114,6 +115,8 @@ class M5Adapter:
         sales = pd.read_csv(self.raw / "sales_train_validation.csv")
         prices = pd.read_csv(self.raw / "sell_prices.csv")
         mask = pd.Series(True, index=sales.index)
+        if self.store_ids:
+            mask &= sales["store_id"].isin(self.store_ids)
         if self.store_id is not None:
             mask &= sales["store_id"] == self.store_id
         if self.dept_id is not None:
@@ -131,6 +134,8 @@ class M5Adapter:
             wide.to_parquet(self.snapshot_dir / "sales.parquet", index=False)
             calendar.drop(columns=[]).to_parquet(self.snapshot_dir / "calendar.parquet", index=False)
             prices_out = prices[prices["item_id"].isin(sales["item_id"].unique())]
+            if self.store_ids:
+                prices_out = prices_out[prices_out["store_id"].isin(self.store_ids)]
             if self.store_id is not None:
                 prices_out = prices_out[prices_out["store_id"] == self.store_id]
             prices_out.reset_index(drop=True).to_parquet(self.snapshot_dir / "prices.parquet", index=False)

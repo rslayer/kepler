@@ -6,7 +6,7 @@ UV := UV_SYSTEM_CERTS=1 uv
 PY := UV_SYSTEM_CERTS=1 uv run --
 
 MODEL ?=
-DATASET ?= m5_ca1
+DATASET ?= m5_3
 RUN ?=
 SEEDS ?= 42,7,123
 JOBS ?= 1

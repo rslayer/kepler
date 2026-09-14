@@ -35,11 +35,11 @@ Loop:
 6. Write the findings file. Log the run. Update the ledger row's status,
    last_run, sessions, and evidence.
 7. If kept, commit on exp/<run_id>. If discarded, revert the change.
-7a. If the harness printed verdict=kept on the screening dataset (m5_ca1), run the
+7a. If the harness printed verdict=kept on the screening dataset (m5_3), run the
    same model once more with DATASET=m5_all PARENT=<the champion's m5_all run> and
    the same SESSION and HYPOTHESIS. The result is kept only if BOTH verdicts are
    kept; log both runs and report both in the findings file. A m5_all backtest takes
-   about 45 minutes and counts against the three-hour cap.
+   about 90 minutes on this laptop and counts against the three-hour cap.
 8. Repeat until told to stop or three hours have elapsed.
 9. Before stopping, append any confirmed finding to datasets/<DATASET>/LESSONS.md
    (or LESSONS.md if it is about the loop or the metric rather than the data), one
@@ -55,7 +55,7 @@ promising unexplored hypothesis.
 <!-- RULES: human-owned. Agents never edit above this line. -->
 <!-- PRIORS: curator-editable below this line. -->
 Priors and domain notes are per dataset: read datasets/<DATASET>/PRIORS.md, where
-DATASET is the dataset you were told to work on (default m5_ca1). The curator rewrites
+DATASET is the dataset you were told to work on (default m5_3, the hierarchical screen). The curator rewrites
 that file; this file's block below the marker holds only harness notes.
 
 ---
@@ -63,8 +63,9 @@ Harness notes (how the rules above map onto this repo):
 - Log a run as researcher with:
       make backtest MODEL=<name> DATASET=<id> AUTHOR=researcher PARENT=<current best run_id> \
           SESSION=<role>-<YYYYMMDD>-<n> HYPOTHESIS=<H###>
-  The harness refuses a researcher run without SESSION and HYPOTHESIS. DATASET defaults
-  to m5_ca1; every run is logged with its dataset.
+  The harness refuses a researcher run without SESSION and HYPOTHESIS. Use DATASET=m5_3
+  (the hierarchical screen; the metric there is wrmsse_hier); every run is logged with its
+  dataset. m5_ca1 is the retired item-level screen, kept for its history.
 - "Current best" is the champion's backtest_run in champion.json when no kept run is
   built on top of it, otherwise the newest kept run whose parent chain leads to the
   champion. Promotion of a kept-and-passed run to champion is a human action
