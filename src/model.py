@@ -191,6 +191,8 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
         return {**super().extra_config(), "early_stopping": self.EARLY_STOPPING_ROUNDS, "validation": "newest_origin"}
 
     CALIBRATE = False
+    CORRECTION = None  # v5 Part B: {"window": 28, "clip": [0.5, 2.0], "shrink": 0.5} or None (off)
+    _val_buffer: list = []
 
     def _calibrate(self, va_frame: pd.DataFrame, va_pred: np.ndarray, pred_frame: pd.DataFrame, pred: np.ndarray) -> np.ndarray:
         """Post-fit adjustment from the validation window (the newest simulated origin's rows =
@@ -230,6 +232,9 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
                   callbacks=[lgb.early_stopping(self.EARLY_STOPPING_ROUNDS, verbose=False)], **fit_kw)
         self.last_best_iteration = int(model.best_iteration_ or params["n_estimators"])
         out = model.predict(x_pred, num_iteration=model.best_iteration_)
+        if self.CORRECTION:  # v5 Part B: keep this model's validation-window predictions for the fold-level correction
+            self._val_buffer.append((train.loc[val_mask, "id"].to_numpy(), train.loc[val_mask, "y"].to_numpy(dtype=float),
+                                     model.predict(x_va, num_iteration=model.best_iteration_)))
         if self.CALIBRATE:  # subclass hook; off by default so every other model is untouched
             va_pred = model.predict(x_va, num_iteration=model.best_iteration_)
             out = self._calibrate(train[val_mask], va_pred, predict, out)
@@ -248,6 +253,19 @@ class LGBMRecipe2Tweedie(LGBMRecipe1Capacity):
     @property
     def features(self) -> list[str]:
         return super().features + ["level_ratio_28_365"]
+
+
+def series_correction(va_id, va_y, va_pred, pred_id, window: int = 28, clip=(0.5, 2.0), shrink: float = 0.5) -> np.ndarray:
+    """v5 Part B: per-series multiplicative correction from the validation window (the last
+    `window` in-sample days before the origin, predicted by models that did not train on
+    them). ratio = sum(actual) / sum(predicted) per series; factor = 1 + shrink * (ratio - 1),
+    clipped to `clip`; series absent from the window (or with no predicted volume) get 1.
+    Role-free: keyed on the contract's series id only."""
+    g = pd.DataFrame({"id": va_id, "y": np.asarray(va_y, dtype=float), "p": np.asarray(va_pred, dtype=float)}).groupby("id", sort=False)[["y", "p"]].sum()
+    ok = g["p"] > 1e-6
+    ratio = pd.Series(1.0, index=g.index); ratio[ok] = g.loc[ok, "y"] / g.loc[ok, "p"]
+    factor = (1.0 + shrink * (ratio - 1.0)).clip(clip[0], clip[1])
+    return factor.reindex(pd.Index(pred_id)).fillna(1.0).to_numpy()
 
 
 class LGBMRecipe3Direct(LGBMRecipe2Tweedie):
@@ -270,10 +288,16 @@ class LGBMRecipe3Direct(LGBMRecipe2Tweedie):
         out = np.empty(len(predict), dtype=float)
         th = train["horizon"].astype(int).to_numpy()
         ph = predict["horizon"].astype(int).to_numpy()
+        if self.CORRECTION:
+            self._val_buffer = []
         for lo, hi in self.WEEKS:
             tm = (th >= lo) & (th <= hi)
             pm = (ph >= lo) & (ph <= hi)
             out[pm] = super()._fit_predict(train[tm], predict[pm], seed)
+        if self.CORRECTION:
+            va_id = np.concatenate([b[0] for b in self._val_buffer]); va_y = np.concatenate([b[1] for b in self._val_buffer])
+            va_p = np.concatenate([b[2] for b in self._val_buffer]); self._val_buffer = []
+            out = out * series_correction(va_id, va_y, va_p, predict["id"].to_numpy(), **self.CORRECTION)
         return out
 
 
@@ -362,6 +386,18 @@ class LGBMXmasThanksgivingDept(LGBMChristmasZero):
 
     def postprocess(self, predict: pd.DataFrame, preds: np.ndarray) -> np.ndarray:
         return super().postprocess(predict, preds) * self._mult
+
+
+class LGBMRecipe6CalendarL2Corr(LGBMRecipe6CalendarL2):
+    """v5 Part B: the best recipe with the per-series correction ON (one variable vs
+    recipe6_calendar_l2). Factor per series = 1 + 0.5 * (actual/predicted over the 28-day
+    validation window - 1), clipped to [0.5, 2.0]; see series_correction()."""
+
+    name = "recipe6_calendar_l2_corr"
+    CORRECTION = {"window": 28, "clip": [0.5, 2.0], "shrink": 0.5}
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "series_correction": dict(self.CORRECTION)}
 
 
 class LGBMRecipeBag3(LGBMRecipe6CalendarL2):
@@ -482,6 +518,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe4RollingL2.name: LGBMRecipe4RollingL2,
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
+    LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
     LGBMRecipeScaled.name: LGBMRecipeScaled,
     LGBMRecipeMomentum.name: LGBMRecipeMomentum,
