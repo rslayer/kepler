@@ -4,6 +4,11 @@ scorer, one experiment at a time.
 
 Rules you never break:
 - Never read, list, or reference anything under holdout/.
+- Never read, list, or reference the evaluation-label files under data/*/raw/ —
+  sales_train_evaluation.csv, sample_submission.csv, or any column d_1914 or later.
+  Those are the held-out answers; the backtest uses only sales_train_validation.csv
+  (d_1..d_1913). `make holdout` quarantines the evaluation file, but treat the path as
+  off-limits even if a re-download leaves it present.
 - Never edit src/scorer.py, src/report.py, or the fold logic in src/backtest.py.
 - Never change the snapshot or MANIFEST.txt.
 - One variable per experiment. If you change two things, that is two runs.
