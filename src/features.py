@@ -49,6 +49,7 @@ CALENDAR_FLAGS: list[str] = []
 PRICE_COLUMN: str = "price"
 CATEGORICAL_COLUMNS: list[str] = []
 FEATURE_COLUMNS: list[str] = []
+PARTITION_COLUMN: str | None = None  # v5 Part C: roles["partition"], the series attribute per-partition models split on
 _BOUND: str | None = None
 
 
@@ -65,12 +66,13 @@ def _feature_columns(flags: list[str], price: str, categoricals: list[str]) -> l
 
 def bind(ds: Dataset) -> None:
     """Resolve the dataset's roles into the module-level feature lists."""
-    global PRICE_COLUMN, _BOUND
+    global PRICE_COLUMN, PARTITION_COLUMN, _BOUND
     if _BOUND is not None and _BOUND != ds.dataset_id:
         raise RuntimeError(f"features already bound to {_BOUND}; one dataset per process")
     # in-place so names imported elsewhere (`from .features import FEATURE_COLUMNS`) stay live
     CALENDAR_FLAGS[:] = list(ds.roles["calendar_flags"])
     PRICE_COLUMN = ds.roles["price"]
+    PARTITION_COLUMN = ds.roles.get("partition")
     CATEGORICAL_COLUMNS[:] = list(ds.roles["categoricals"])
     FEATURE_COLUMNS[:] = _feature_columns(CALENDAR_FLAGS, PRICE_COLUMN, CATEGORICAL_COLUMNS)
     _BOUND = ds.dataset_id
