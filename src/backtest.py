@@ -558,6 +558,14 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("--reparent needs --parent")
         reparent(args.reparent, args.parent, args.author, args.session)
         return 0
+    if not os.environ.get("KEPLER_RUNS_DIR"):
+        # v5 Part E: a run logged to the canonical runs/ must carry a clean commit hash.
+        # (Reruns redirected with KEPLER_RUNS_DIR - adversary scratch - are exempt; their
+        # hash still records -dirty.) tools/cycle.sh enforces the same before a headless cycle.
+        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        if dirty:
+            raise SystemExit("working tree is dirty; commit (or stash) before a backtest so the run's git_commit is "
+                             "reproducible:\n  " + "\n  ".join(dirty.splitlines()[:8]) + ("\n  ..." if len(dirty.splitlines()) > 8 else ""))
     if args.author == "researcher" and not (args.session and args.hypothesis):
         raise SystemExit(
             "researcher runs must name SESSION=<role>-<YYYYMMDD>-<n> and HYPOTHESIS=<H### from "
