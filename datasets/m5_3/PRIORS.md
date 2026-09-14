@@ -27,8 +27,10 @@ Priors (what to try first; every line cites a run id or a LESSONS line):
   mean by +0.003 [r104 vs r107]; use the bagged base so later changes are judged against a
   ~0.005 bar, not 0.022.
 - Bias and scale first: the recipe's bias is -2% to -5% on most windows; at the total that
-  is most of the error. Per-series scaled targets or a per-store x department calibration
-  from the last 28 days [recipe m5_all folds; SPEC_v4 lever 1].
+  is most of the error. Per-series ratio targets are NOT the fix (they trade calm folds for
+  post-holiday folds, LESSONS r109/r112); momentum features are neutral (r110). Still open:
+  per-store x department calibration from the 28 days before the origin (recipe_calib,
+  H145), an event-robust scale for the ratio target (H146), per-store models (H147).
 - Seed-averaged forecasts (harness lever), per-store models (ingredient 7), event-effect
   features from prior years generalising r037/r060, then long history with recency
   (r070) — in that order [SPEC_v4 Part C notes; LESSONS m5_ca1 r070].
