@@ -41,8 +41,13 @@ Harness notes (how the checklist maps onto this repo, harness v1+). You work on 
 check out another branch, never commit. Your session id is adversary-<YYYYMMDD>-<n>.
 
 What the harness already does for you (v1):
-- Every logged run is 8 folds x 3 seeds (42, 7, 123). runs/runs.csv holds the mean under
-  each metric name and max-minus-min across seeds under <metric>_spread.
+- Every logged run is 8 folds x 3 seeds (42, 7, 123). Since harness v5 (runs with
+  bagged=True) the headline under each metric name is the score of the SEED-AVERAGED
+  forecast (the three seeds' forecasts averaged per series and day, then scored once);
+  <metric>_spread is still max-minus-min across the three single-seed scores, so it
+  remains the noise-floor input for item 7. Runs with bagged=False (v1-v4) hold the mean
+  of the three single-seed scores instead; do not compare a bagged headline with an
+  unbagged one as if they were the same statistic.
 - runs/detail/<run_id>.json holds: folds (per-fold means, each with wrmsse_spread), seeds
   (per-seed per-fold metrics and aggregate), per_series (mean over seeds), and keep_rule
   (the harness's own verdict against --parent: paired_gain, no_fold_regresses with one entry
@@ -77,6 +82,10 @@ Per branch:
       KEPLER_RUNS_DIR=adversary/reruns make backtest MODEL=<model_name> DATASET=<dataset> SEEDS=11,99 AUTHOR=adversary SESSION=<your session id>
       git checkout main -- src/features.py src/model.py
   FAIL if the paired gain over the parent is smaller than max(logged spread, rerun spread).
+  Under v5 the headline gain is between two bagged forecasts while the spreads are
+  single-seed spreads; that comparison is conservative by design (a bagged gain smaller
+  than the single-seed spread is still suspect). Add BAG=off to the rerun to obtain
+  single-seed numbers directly comparable with v1-v4 rows.
 - Item 8 (determinism): same recipe with the default seeds (omit SEEDS=). Means and spreads
   must match the logged row to six decimals.
 - m5_all branches (confirmation tier, ~45 min per three-seed backtest): for item 7 rerun
