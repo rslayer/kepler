@@ -8,3 +8,4 @@ H146,untried,"Ratio target with an event-robust scale (median of 8 same-weekday 
 H147,untried,Per-store models on the bagged recipe (ingredient 7),,,,SPEC_v4 Part C; untested on any tier
 H150,kept,v5 Part A: lgbm_baseline with seed-averaged forecasts (bag_seeds on) — the bagged screen baseline,r114,r116,v5-parta-20260914,bagged baseline hier 0.670844; r114 == r116 to six decimals (determinism)
 H151,discarded,v5 Part A: recipe6_calendar_l2 with seed-averaged forecasts vs the bagged baseline — does the screen certify the recipe?,r115,r115,v5-parta-20260914,"bagged recipe 0.648900 vs 0.670844: gain 0.0219 < 0.0222 (2 x single-seed spread), folds 5-8 regress; not seed noise"
+H152,running,"v5 Part B: per-series multiplicative correction (validation-window actual/predicted, shrink 0.5, clip [0.5,2]) ON vs OFF on recipe6_calendar_l2, bagged",,,v5-partb-20260914,"OFF = r115; smoke fold 8: hier 0.602 vs 0.538, bias +5.2% — expect discard"
