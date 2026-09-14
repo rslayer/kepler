@@ -361,6 +361,31 @@ class LGBMRecipeBag3(LGBMRecipe6CalendarL2):
         return np.mean(preds, axis=0)
 
 
+class LGBMRecipeScaled(LGBMRecipeBag3):
+    """Bias fix 1 (SPEC_v4 lever 1): predict a RATIO, not a level. The training target is
+    y / scale where scale = the series' 28-day mean at the origin (the roll_mean_28 feature,
+    floored so zero-history series fall back to an unscaled target); predictions are
+    multiplied back by the same scale. Trees cannot extrapolate a level they have not seen;
+    a level-invariant target lets growth between the training window and the forecast
+    window pass straight through. Everything else as recipe_bag3."""
+
+    name = "recipe_scaled"
+    SCALE_FEATURE = "roll_mean_28"
+    SCALE_FLOOR = 0.1  # below this the series is essentially dormant; use the raw target
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "target_scale": self.SCALE_FEATURE, "scale_floor": self.SCALE_FLOOR}
+
+    def _scale(self, frame: pd.DataFrame) -> np.ndarray:
+        s = frame[self.SCALE_FEATURE].to_numpy(dtype=float)
+        return np.where(s >= self.SCALE_FLOOR, s, 1.0)
+
+    def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
+        s_tr = self._scale(train)
+        scaled = train.assign(y=train["y"].to_numpy(dtype=float) / s_tr)
+        return super()._fit_predict(scaled, predict, seed) * self._scale(predict)
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -376,6 +401,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
+    LGBMRecipeScaled.name: LGBMRecipeScaled,
 
 
     LGBMXmasThanksgivingDept.name: LGBMXmasThanksgivingDept,
