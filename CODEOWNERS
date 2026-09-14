@@ -26,4 +26,16 @@
 
 /src/score_holdout.py @rslayer
 
+# These feed the frozen scorer and define the holdout / hierarchy / weights, so they
+# are as security-critical as the scorer itself. Freezing them closes the gap where an
+# agent could change the scored number without touching a "frozen" file:
+#   scoring.py     — assembles the sales/calendar/prices frames the frozen scorer sees
+#   data.py        — loader + verify_manifest (snapshot integrity gate)
+#   contract.py    — validate(): the structural no-target-columns / full-grid check
+#   adapters/m5.py — holdout cut, manifest, 12-level hierarchy, dollar-weight inputs
+/src/scoring.py    @rslayer
+/src/data.py       @rslayer
+/src/contract.py   @rslayer
+/src/adapters/m5.py @rslayer
+
 /tools/make_fixture.py @rslayer

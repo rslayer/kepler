@@ -63,10 +63,28 @@ score-holdout:
 	@if [ -z "$(MODEL)" ]; then echo "usage: make score-holdout MODEL=<name>"; exit 2; fi
 	$(PY) python -m src.score_holdout --model $(MODEL) --dataset $(DATASET)
 
+# Frozen baseline: the ref whose frozen-file contents are authoritative. Move it
+# (re-tag) whenever the human legitimately changes a frozen file, e.g.
+#   git tag -f v4-partc <commit-with-the-new-frozen-state>
+# NOTE: as of this change v4-partc is stale — src/score_holdout.py was legitimately
+# updated in 140f4d6 (wrmsse_hier yardstick) after the tag. Re-point FROZEN_REF (or
+# re-tag) to a commit whose frozen files match the intended baseline before relying on
+# `make verify-frozen`; otherwise it will (correctly, now) report that divergence.
+FROZEN_REF ?= v4-partc
+
+# Every file whose contents the harness's integrity depends on. This must include not
+# just the scorer but everything that FEEDS it: the fold logic + keep rule (backtest),
+# the frames handed to the frozen scorer (scoring), the loader + manifest gate (data),
+# the structural leak check (contract), and the adapter that defines the holdout cut,
+# the hierarchy levels, and the dollar weights (adapters/m5).
+FROZEN_FILES := src/scorer.py src/report.py src/score_holdout.py src/scorer_hier.py \
+                src/backtest.py src/scoring.py src/data.py src/contract.py src/adapters/m5.py
+
 verify-frozen:
-	@echo "--- diff vs v4-partc on frozen files (empty output = clean) ---"
-	@git diff v4-partc -- src/scorer.py src/report.py src/score_holdout.py src/scorer_hier.py
-	@$(PY) python tools/check_claude_diff.py v4-partc HEAD
+	@echo "--- frozen files must match $(FROZEN_REF); any diff FAILS this target ---"
+	@git diff --exit-code $(FROZEN_REF) -- $(FROZEN_FILES)
+	@$(PY) python tools/check_claude_diff.py $(FROZEN_REF) HEAD
+	@echo "frozen: clean (files match $(FROZEN_REF), CLAUDE.md Rules block unchanged)"
 
 forecast:
 	@if [ -z "$(ASOF)" ]; then echo "usage: make forecast ASOF=<YYYY-MM-DD> [DATASET=<id>] [HORIZON=28]"; exit 2; fi
