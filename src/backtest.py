@@ -55,9 +55,29 @@ RUN_COLUMNS = [
     "wape_h1_7_spread", "wape_h8_14_spread", "wape_h15_28_spread",
     "seconds", "status", "findings_file", "author", "verdict", "session", "hypothesis_id", "dataset",
     "wrmsse_hier", "wrmsse_hier_spread",
+    "bagged",  # v5: True when the headline metrics score the seed-averaged forecast
 ]
+BAG_SEEDS_DEFAULT = True  # v5 Part A: new runs bag seeds unless --bag-seeds off (reproduces v1-v4 runs)
 METRIC_KEYS = ["wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28"]
 HIER_KEY = "wrmsse_hier"  # logged when the dataset's roles define a hierarchy; the keep rule then uses it
+
+
+def bag_forecasts(preds: list[pd.DataFrame]) -> pd.DataFrame:
+    """Seed-averaged forecast: the mean of the per-seed forecasts for every (id, date).
+    All frames must cover the same (id, date) set; rows are aligned on the first frame's
+    order so the result is deterministic. This is the forecast a production model would
+    serve, and scoring it (rather than each seed separately) removes most seed-to-seed
+    noise from the headline metric."""
+    if len(preds) == 1:
+        return preds[0]
+    base = preds[0][["id", "date"]].reset_index(drop=True)
+    stack = []
+    for f in preds:
+        g = f.set_index(["id", "date"])["forecast"]
+        stack.append(g.reindex(pd.MultiIndex.from_frame(base)).to_numpy(dtype=float))
+        if np.isnan(stack[-1]).any():
+            raise SystemExit("seed forecasts do not cover the same (id, date) set; cannot bag")
+    return base.assign(forecast=np.mean(np.vstack(stack), axis=0))
 
 
 # --------------------------------------------------------------------------- fold logic
@@ -143,9 +163,13 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
        fold's (averaging folds cancels seed noise) and would discard on ordinary noise.
     3. bias guardrail: |child bias| <= |parent bias| + 0.02.
     """
-    p_agg = {k: float(np.mean([parent["seeds"][s]["aggregate"][k] for s in parent["seeds"]]))
-             for k in (metric, "bias")}
-    p_vals = [parent["seeds"][s]["aggregate"][metric] for s in parent["seeds"]]
+    if parent.get("bagged") and parent.get("bagged_aggregate"):
+        # v5: a bagged parent's headline is the score of its seed-averaged forecast
+        p_agg = {k: float(parent["bagged_aggregate"][k]) for k in (metric, "bias")}
+    else:
+        p_agg = {k: float(np.mean([parent["seeds"][s]["aggregate"][k] for s in parent["seeds"]]))
+                 for k in (metric, "bias")}
+    p_vals = [parent["seeds"][s]["aggregate"][metric] for s in parent["seeds"]]  # spread: pre-bagging, always
     p_spread = float(max(p_vals) - min(p_vals))
     c_mean, c_spread, c_bias = (float(child_row[metric]), float(child_row[f"{metric}_spread"]),
                                 float(child_row["bias"]))
@@ -174,6 +198,7 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
 
     verdict = "kept" if (cond1["pass"] and cond2["pass"] and cond3["pass"]) else "discarded"
     return {"parent": parent["run_id"], "verdict": verdict, "metric": metric,
+            "parent_bagged": bool(parent.get("bagged", False)), "child_bagged": bool(child_row.get("bagged") in (True, "True")),
             "paired_gain": cond1, "no_fold_regresses": cond2, "bias_guardrail": cond3}
 
 
@@ -253,6 +278,7 @@ def run_backtest(
     hypothesis_id: str = "",
     dataset_id: str = DEFAULT_DATASET,
     jobs: int = 1,
+    bag_seeds: bool = BAG_SEEDS_DEFAULT,
 ) -> dict:
     parent = load_parent(parent_id) if parent_id else None  # fail fast, before any fit
     ds = load_dataset(dataset_id)
@@ -265,7 +291,8 @@ def run_backtest(
     metric = HIER_KEY if hierarchy else "wrmsse"
     timeout = int(getattr(ds, "timeout_minutes", TIMEOUT_SECONDS // 60)) * 60
 
-    print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author} jobs={jobs}")
+    print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author} jobs={jobs} "
+          f"bag_seeds={'on' if bag_seeds else 'off'}")
     print(f"snapshot: {len(panel.ids)} series, {len(panel.dates)} days, last {panel.last_date.date()}")
     print(f"fold origins ({len(origins)} folds, {FOLD_SPACING}-day spacing, {HORIZON}-day horizon): "
           + ", ".join(str(pd.Timestamp(o).date()) for o in origins))
@@ -275,8 +302,19 @@ def run_backtest(
                    if jobs > 1 else None)
     fold_metrics: list[dict] = []          # per fold: mean across seeds
     seed_folds: dict[int, list[dict]] = {sd: [] for sd in seeds}  # per seed: per-fold metrics
-    per_series: list[pd.DataFrame] = []    # per fold: per-series detail, mean across seeds
+    per_series: list[pd.DataFrame] = []    # per fold: per-series detail (bagged forecast, or mean across seeds)
+    bag_folds: list[dict] = []             # per fold: metrics of the seed-averaged forecast (bag_seeds on)
     status = "ok"
+
+    def score(pred: pd.DataFrame, truth: pd.DataFrame, train_long: pd.DataFrame) -> tuple[dict, pd.DataFrame]:
+        metrics, detail = scorer.score_window(truth[["id", "date", "sales"]], pred, train_long, prices, calendar)
+        if hierarchy:
+            hm, _ = scorer_hier.score_window_hier(
+                truth[["id", "date", "sales"]], pred, train_long, prices, calendar, ds.series, hierarchy
+            )
+            metrics[HIER_KEY] = hm["wrmsse_hier"]
+            metrics["hier_levels"] = hm["levels"]
+        return metrics, detail
 
     for i, origin in enumerate(origins, start=1):
         window_end = origin + pd.Timedelta(days=HORIZON - 1)
@@ -284,21 +322,15 @@ def run_backtest(
         train_long = sales[sales["date"] < origin]
 
         seed_details = []
+        seed_preds = []
         for sd in seeds:  # fits are sequential here unless --jobs precomputed them
             if precomputed is not None and (str(origin), sd) not in precomputed:
                 break  # budget ran out during the parallel fits
             pred = precomputed[(str(origin), sd)] if precomputed else model.forecast(panel, origin, HORIZON, sd)
             if (pred["date"] < origin).any() or (pred["date"] > window_end).any():
                 raise SystemExit(f"model returned dates outside fold {i}'s window")
-            metrics, detail = scorer.score_window(
-                truth[["id", "date", "sales"]], pred, train_long, prices, calendar
-            )
-            if hierarchy:
-                hm, per_level = scorer_hier.score_window_hier(
-                    truth[["id", "date", "sales"]], pred, train_long, prices, calendar, ds.series, hierarchy
-                )
-                metrics[HIER_KEY] = hm["wrmsse_hier"]
-                metrics["hier_levels"] = hm["levels"]
+            seed_preds.append(pred)
+            metrics, detail = score(pred, truth, train_long)
             metrics["fold"] = i
             metrics["origin"] = str(pd.Timestamp(origin).date())
             metrics["seed"] = sd
@@ -309,10 +341,25 @@ def run_backtest(
 
         done = [seed_folds[sd][-1] for sd in seeds if len(seed_folds[sd]) == i]
         keys = METRIC_KEYS + ([HIER_KEY] if hierarchy else [])
-        fold_mean = {k: float(np.mean([m[k] for m in done])) for k in keys}
+        seed_mean = {k: float(np.mean([m[k] for m in done])) for k in keys}
+        bagged_fold = bag_seeds and len(done) == len(seeds)
+        if bagged_fold:
+            # v5: the headline fold metrics score the seed-averaged forecast; per-seed
+            # means and spreads are kept alongside (spread = the noise-floor input).
+            bag_metrics, bag_detail = score(bag_forecasts(seed_preds), truth, train_long)
+            bag_metrics.update(fold=i, origin=str(pd.Timestamp(origin).date()))
+            bag_folds.append(bag_metrics)
+            fold_mean = {k: float(bag_metrics[k]) for k in keys}
+            fold_mean["seed_mean"] = seed_mean
+            if hierarchy:
+                fold_mean["hier_levels"] = bag_metrics["hier_levels"]
+        else:
+            fold_mean = dict(seed_mean)
+            if hierarchy:
+                fold_mean["hier_levels"] = {lv: float(np.mean([m["hier_levels"][lv] for m in done])) for lv in done[0]["hier_levels"]}
         if hierarchy:
             fold_mean["wrmsse_hier_spread"] = float(max(m[HIER_KEY] for m in done) - min(m[HIER_KEY] for m in done))
-            fold_mean["hier_levels"] = {lv: float(np.mean([m["hier_levels"][lv] for m in done])) for lv in done[0]["hier_levels"]}
+        fold_mean["bagged"] = bool(bagged_fold)
         fold_mean.update(
             fold=i,
             origin=str(pd.Timestamp(origin).date()),
@@ -323,7 +370,8 @@ def run_backtest(
         )
         fold_metrics.append(fold_mean)
         per_series.append(
-            pd.concat(seed_details).groupby(level=0).mean(numeric_only=True).assign(fold=i)
+            bag_detail.assign(fold=i) if bagged_fold
+            else pd.concat(seed_details).groupby(level=0).mean(numeric_only=True).assign(fold=i)
         )
 
         elapsed = time.time() - started
@@ -347,7 +395,8 @@ def run_backtest(
         "git_commit": git_commit(),
         "model_name": model_name,
         "config_hash": config_hash(
-            {"model": model.config(), "seeds": list(seeds), "folds": n_folds, "fold_spacing": FOLD_SPACING}
+            {"model": model.config(), "seeds": list(seeds), "folds": n_folds, "fold_spacing": FOLD_SPACING,
+             **({"bag_seeds": True} if bag_seeds else {})}  # off = the v1-v4 hash, unchanged
         ),
         "fold_count": len(fold_metrics),
         "fold_spacing": FOLD_SPACING,
@@ -358,18 +407,25 @@ def run_backtest(
         "session": session,
         "hypothesis_id": hypothesis_id,
         "dataset": dataset_id,
+        "bagged": bool(bag_seeds),
     }
     seed_aggregates = {}
+    bag_aggregate = None
     if status == "ok":
         # Aggregate each seed over folds with the frozen scorer, then mean / spread across seeds.
         seed_aggregates = {sd: scorer.aggregate_folds(seed_folds[sd]) for sd in seeds}
         if hierarchy:
             for sd in seeds:
                 seed_aggregates[sd][HIER_KEY] = float(np.mean([m[HIER_KEY] for m in seed_folds[sd]]))
+        if bag_seeds:
+            # v5: headline = the seed-averaged forecast's own aggregate (same frozen aggregation)
+            bag_aggregate = scorer.aggregate_folds(bag_folds)
+            if hierarchy:
+                bag_aggregate[HIER_KEY] = float(np.mean([m[HIER_KEY] for m in bag_folds]))
         for k in METRIC_KEYS + ([HIER_KEY] if hierarchy else []):
             vals = [seed_aggregates[sd][k] for sd in seeds]
-            row[k] = f"{float(np.mean(vals)):.6f}"
-            row[f"{k}_spread"] = f"{float(max(vals) - min(vals)):.6f}"
+            row[k] = f"{(bag_aggregate[k] if bag_seeds else float(np.mean(vals))):.6f}"
+            row[f"{k}_spread"] = f"{float(max(vals) - min(vals)):.6f}"  # pre-bagging, by design
 
     kr = None
     if parent is None:
@@ -402,6 +458,8 @@ def run_backtest(
                 "author": author,
                 "status": status,
                 "config": model.config(),
+                "bagged": bool(bag_seeds),
+                "bagged_aggregate": bag_aggregate,
                 "folds": fold_metrics,
                 "keep_rule": kr,
                 "seeds": {
@@ -423,6 +481,10 @@ def run_backtest(
             + f"  WAPE={row['wape']}  bias={row['bias']}\n"
             f"  WAPE h1-7={row['wape_h1_7']} h8-14={row['wape_h8_14']} h15-28={row['wape_h15_28']}"
         )
+        if bag_seeds:
+            sm = {k: float(np.mean([seed_aggregates[sd][k] for sd in seeds])) for k in ("wrmsse", *([HIER_KEY] if hierarchy else []))}
+            print("  headline scores the seed-averaged forecast (bagged=True); per-seed means: "
+                  + "  ".join(f"{k}={v:.6f}" for k, v in sm.items()))
     print(f"  detail: runs/detail/{run_id}.json   findings: {row['findings_file']}")
     if kr and "paired_gain" in kr:
         print_keep_rule(kr)
@@ -451,9 +513,12 @@ def reparent(run_id: str, parent_id: str, author: str, session: str) -> dict:
     row = {k: "" for k in RUN_COLUMNS}
     new_id = next_run_id()
     keys = METRIC_KEYS + ([HIER_KEY] if metric == HIER_KEY else [])
+    bagged = bool(d.get("bagged")) and bool(d.get("bagged_aggregate"))
     for k in keys:
         vals = [d["seeds"][str(sd)]["aggregate"][k] for sd in seeds]
-        row[k] = f"{float(np.mean(vals)):.6f}"; row[f"{k}_spread"] = f"{float(max(vals) - min(vals)):.6f}"
+        row[k] = f"{(d['bagged_aggregate'][k] if bagged else float(np.mean(vals))):.6f}"
+        row[f"{k}_spread"] = f"{float(max(vals) - min(vals)):.6f}"
+    row["bagged"] = bagged
     row.update(run_id=new_id, timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"), git_commit=git_commit(),
                model_name=d["model_name"], config_hash=config_hash({"model": d["config"], "seeds": seeds, "folds": len(d["folds"]),
                                                                     "fold_spacing": d.get("fold_spacing", FOLD_SPACING)}),
@@ -485,6 +550,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hypothesis", default="", help="H### from hypotheses/ledger.csv; required for researcher runs")
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument("--jobs", type=int, default=1, help="worker processes for the (fold, seed) fits")
+    parser.add_argument("--bag-seeds", choices=["on", "off"], default="on" if BAG_SEEDS_DEFAULT else "off",
+                        help="on (default): headline metrics score the seed-averaged forecast; off reproduces v1-v4 runs")
     args = parser.parse_args(argv)
     if args.reparent:
         if not args.parent:
@@ -501,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
         if not seeds:
             raise SystemExit("--seeds must name at least one seed")
         run_backtest(args.model, seeds, args.author, args.folds, args.parent or None,
-                     args.session, args.hypothesis, args.dataset, max(1, args.jobs))
+                     args.session, args.hypothesis, args.dataset, max(1, args.jobs), args.bag_seeds == "on")
     except SystemExit:
         raise
     except Exception as exc:  # log the failure rather than losing it
@@ -523,6 +590,7 @@ def main(argv: list[str] | None = None) -> int:
                 "session": args.session,
                 "hypothesis_id": args.hypothesis,
                 "dataset": args.dataset,
+                "bagged": args.bag_seeds == "on",
             }
         )
         print(f"run failed, logged {run_id} with status=error: {type(exc).__name__}: {exc}", file=sys.stderr)

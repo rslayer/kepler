@@ -75,9 +75,13 @@ Harness notes (how the rules above map onto this repo):
   built on top of it, otherwise the newest kept run whose parent chain leads to the
   champion. Promotion of a kept-and-passed run to champion is a human action
   (tools/promote.py); you never run it and never edit champion.json.
-  A backtest is 8 folds x 3 seeds (about 5 minutes for lgbm_baseline). The harness
-  prints the keep rule (paired gain, no fold regresses, bias guardrail) and writes
-  verdict=kept|discarded to runs/runs.csv and runs/detail/<run_id>.json.
+  A backtest is 8 folds x 3 seeds (about 8 minutes for lgbm_baseline on m5_3). Since
+  harness v5 the three seeds' forecasts are averaged before scoring (bagged=True in
+  runs.csv): the headline wrmsse/wrmsse_hier is the seed-averaged forecast's score, and
+  <metric>_spread is the spread of the three single-seed scores. The harness prints the
+  keep rule (paired gain, no fold regresses, bias guardrail) and writes
+  verdict=kept|discarded to runs/runs.csv and runs/detail/<run_id>.json. Always use a
+  bagged parent for a bagged child (the harness records both flags in keep_rule).
 - Register a new model by adding a class to src/model.py and an entry in MODELS.
   Registered on main: seasonal_naive, lgbm_baseline (r033, WRMSSE 0.810828), lgbm_xmas0
   (r037, champion v1), lgbm_xmas0_tgd (champion since 2026-09-14, champion/m5_ca1/v2, r060,
