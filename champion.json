@@ -42,10 +42,11 @@
     "backtest_run": "r083",
     "backtest_wrmsse": 0.86167,
     "backtest_wrmsse_hier": 0.785019,
-    "holdout_wrmsse": null,
-    "holdout_note": "yardstick not yet scored; human: make score-holdout MODEL=lgbm_baseline DATASET=m5_all (one shot, ever)",
+    "holdout_wrmsse": 0.723437,
+    "holdout_note": "yardstick scored 2026-09-14 (make score-holdout MODEL=lgbm_baseline DATASET=m5_all): wrmsse_hier 0.723437 on d_1914-d_1941, the competition's evaluation period; item-level 0.837618",
     "promoted_at": null,
     "promoted_by": "human (seed, SPEC_v4 Part B)",
-    "previous": null
+    "previous": null,
+    "holdout_metric": "wrmsse_hier"
   }
 }
