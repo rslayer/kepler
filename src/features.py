@@ -285,6 +285,9 @@ def build_frame(
         {
             "id": np.repeat(panel.ids, horizon),
             **{c: np.repeat(panel.attrs[c], horizon) for c in CATEGORICAL_COLUMNS},
+            # remaining series attributes ride along as plain columns (not in FEATURE_COLUMNS;
+            # used only by post-fit hooks such as per-group calibration)
+            **{c: pd.Categorical(np.repeat(panel.attrs[c], horizon)) for c in panel.attrs if c not in CATEGORICAL_COLUMNS},
             "date": np.tile(dates.to_numpy(), n_series),
             "horizon": np.tile(np.arange(1, horizon + 1, dtype="int16"), n_series),
         }
