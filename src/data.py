@@ -19,7 +19,7 @@ from .adapters import get_adapter
 from .contract import Dataset, validate
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATASET = "m5_ca1"
+DEFAULT_DATASET = "m5_3"
 
 
 def load_dataset(dataset_id: str = DEFAULT_DATASET, with_holdout: bool = False) -> Dataset:

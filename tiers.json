@@ -1,8 +1,11 @@
 {
   "tiers": {
     "m5_all": {
-      "screen": "m5_ca1"
+      "screen": "m5_3"
     }
   },
-  "note": "confirmation dataset -> its screening dataset. A kept screen result is confirmed by a kept run of the same model on the confirmation dataset in the same session; promotion on a confirmation dataset requires both (tools/promote.py condition 1b)."
+  "note": "confirmation dataset -> its screening dataset. A kept screen result is confirmed by a kept run of the same model on the confirmation dataset in the same session; promotion on a confirmation dataset requires both (tools/promote.py condition 1b).",
+  "legacy": {
+    "m5_ca1": "v0-v3 screening tier (one store, item-level metric); kept for its run history, no longer the screen"
+  }
 }
