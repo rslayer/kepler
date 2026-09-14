@@ -151,9 +151,9 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
                                 float(child_row["bias"]))
 
     tol = 2 * max(p_spread, c_spread)
-    gain = p_agg["wrmsse"] - c_mean
+    gain = p_agg[metric] - c_mean
     cond1 = {"pass": bool(gain > tol), "gain": gain, "threshold": tol,
-             "parent_mean": p_agg["wrmsse"], "child_mean": c_mean,
+             "parent_mean": p_agg[metric], "child_mean": c_mean,
              "parent_spread": p_spread, "child_spread": c_spread}
 
     p_folds = parent["folds"]
