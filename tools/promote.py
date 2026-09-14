@@ -143,16 +143,29 @@ def main(argv: list[str]) -> int:
     bad = [p for p in touched if not p.startswith(ALLOWED_PREFIXES)]
     if bad:
         return refuse(5, f"branch touches disallowed paths: {bad}")
+    # Bookkeeping files (runs/, findings/, hypotheses/, datasets/, LESSONS.md) are synced from
+    # the branch to main by the cycle before main appends more rows, so main's versions win;
+    # only a conflict in src/ blocks promotion.
+    BOOKKEEPING = ("runs/", "findings/", "hypotheses/", "datasets/", "LESSONS.md")
     trial = git("merge", "--no-commit", "--no-ff", branch, check=False)
     conflicts = git("diff", "--name-only", "--diff-filter=U").stdout.split()
     git("merge", "--abort", check=False)
-    if trial.returncode != 0 or conflicts:
-        return refuse(5, f"merge conflicts in {conflicts or 'unknown files'}")
-    print("condition 5 ok: only allowed paths touched; merges cleanly")
+    src_conflicts = [c for c in conflicts if not c.startswith(BOOKKEEPING)]
+    if src_conflicts:
+        return refuse(5, f"merge conflicts in {src_conflicts}")
+    print(f"condition 5 ok: only allowed paths touched; merges cleanly"
+          + (f" (bookkeeping conflicts resolved in main's favour: {conflicts})" if conflicts else ""))
 
     # promote
     if git("merge", "--ff-only", branch, check=False).returncode != 0:
-        git("merge", "--no-ff", "--no-edit", "-m", f"promote {branch} to champion/{dataset} (promotion gate: all conditions met)", branch)
+        msg = f"promote {branch} to champion/{dataset} (promotion gate: all conditions met)"
+        if conflicts:
+            git("merge", "--no-ff", "--no-commit", branch, check=False)
+            git("checkout", "--ours", "--", *conflicts)
+            git("add", "--", *conflicts)
+            git("commit", "-q", "-m", msg)
+        else:
+            git("merge", "--no-ff", "--no-edit", "-m", msg, branch)
     existing = [t for t in git("tag", "--list", f"champion/{dataset}/v*").stdout.split()]
     n = 1 + max([int(t.rsplit("v", 1)[1]) for t in existing] or [0])
     tag_name = f"champion/{dataset}/v{n}"
