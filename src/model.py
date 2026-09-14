@@ -344,6 +344,23 @@ class LGBMXmasThanksgivingDept(LGBMChristmasZero):
         return super().postprocess(predict, preds) * self._mult
 
 
+class LGBMRecipeBag3(LGBMRecipe6CalendarL2):
+    """Lever 2 (SPEC_v4): seed-averaged forecasts. forecast(seed) is the mean of three fits
+    at sub-seeds derived from `seed`, so each logged seed is already a small ensemble. The
+    harness's per-seed spread shrinks (~1/sqrt(3)) and the keep-rule bar with it; the
+    variance reduction usually also improves the mean. 3x the fit cost."""
+
+    name = "recipe_bag3"
+    BAG = 3
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "bag": self.BAG}
+
+    def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
+        preds = [super(LGBMRecipeBag3, self)._fit_predict(train, predict, seed + 1000 * k) for k in range(self.BAG)]
+        return np.mean(preds, axis=0)
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -358,6 +375,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe4RollingL2.name: LGBMRecipe4RollingL2,
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
+    LGBMRecipeBag3.name: LGBMRecipeBag3,
 
 
     LGBMXmasThanksgivingDept.name: LGBMXmasThanksgivingDept,

@@ -24,11 +24,13 @@ from .data import DEFAULT_DATASET, ROOT, load_dataset
 from .features import HORIZON, Panel
 from .model import get_model
 from .scorer import score_window
+from .scorer_hier import score_window_hier
 
 HOLDOUT_CSV = ROOT / "runs" / "holdout.csv"
 HOLDOUT_COLUMNS = [
     "timestamp", "git_commit", "dataset", "model_name", "config_hash",
     "wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28", "seconds",
+    "wrmsse_hier",  # the yardstick on hierarchical datasets (12 levels, equally weighted)
 ]
 
 
@@ -69,6 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     pred = model.forecast(panel, origin, HORIZON, args.seed)
     metrics, _ = score_window(held[["id", "date", "sales"]], pred,
                               sales[sales["date"] < origin], prices, calendar)
+    hierarchy = full.roles.get("hierarchy") or []
+    hier = None
+    if hierarchy:
+        hm, per_level = score_window_hier(held[["id", "date", "sales"]], pred, sales[sales["date"] < origin],
+                                          prices, calendar, full.series, hierarchy)
+        hier = hm["wrmsse_hier"]
+        print(per_level[["level", "score"]].to_string(index=False, float_format=lambda x: f"{x:.4f}"))
     seconds = time.time() - started
 
     row = {
@@ -79,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         "config_hash": config_hash({"model": model.config(), "seed": args.seed}),
         "seconds": f"{seconds:.1f}",
         **{k: f"{metrics[k]:.6f}" for k in ("wrmsse", "wape", "bias", "wape_h1_7", "wape_h8_14", "wape_h15_28")},
+        "wrmsse_hier": f"{hier:.6f}" if hier is not None else "",
     }
     rows = []
     if HOLDOUT_CSV.exists() and HOLDOUT_CSV.stat().st_size > 0:
@@ -89,7 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         w = csv.DictWriter(fh, fieldnames=HOLDOUT_COLUMNS)
         w.writeheader()
         w.writerows({k: r.get(k, "") for k in HOLDOUT_COLUMNS} for r in rows)
-    print(f"holdout {args.dataset} {args.model}: WRMSSE={row['wrmsse']} WAPE={row['wape']} bias={row['bias']}")
+    print(f"holdout {args.dataset} {args.model}: WRMSSE={row['wrmsse']}"
+          + (f" WRMSSE_hier={row['wrmsse_hier']}" if hier is not None else "") + f" WAPE={row['wape']} bias={row['bias']}")
     print("appended to runs/holdout.csv")
     return 0
 
