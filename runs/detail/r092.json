@@ -1,5 +1,5 @@
 {
-  "run_id": "r072",
+  "run_id": "r092",
   "model_name": "recipe5_price",
   "dataset": "m5_ca1",
   "metric": "wrmsse",
@@ -211,7 +211,7 @@
     }
   ],
   "keep_rule": {
-    "parent": "r071",
+    "parent": "r091",
     "verdict": "discarded",
     "metric": "wrmsse",
     "paired_gain": {

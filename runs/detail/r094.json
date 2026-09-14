@@ -1,5 +1,5 @@
 {
-  "run_id": "r074",
+  "run_id": "r094",
   "model_name": "recipe3_direct_l2",
   "dataset": "m5_ca1",
   "metric": "wrmsse",
@@ -189,7 +189,7 @@
     }
   ],
   "keep_rule": {
-    "parent": "r068",
+    "parent": "r088",
     "verdict": "discarded",
     "metric": "wrmsse",
     "paired_gain": {
