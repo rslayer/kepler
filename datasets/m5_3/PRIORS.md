@@ -18,6 +18,14 @@ Domain notes:
   rejected every ingredient. [r083 vs the recipe run on m5_all]
 
 Priors (what to try first; every line cites a run id or a LESSONS line):
+- The recipe's gain on this screen is the holiday window: fold 1 (Thanksgiving/Christmas)
+  1.13 -> 0.83, while on the four calm late-winter folds it is WORSE than the baseline at
+  every aggregate level (fold 7 total 0.51 vs 0.40) and equal at item level, with bias
+  -1% to -2% where the baseline's is ~0 [r103 vs r107]. Calm-month aggregate error is
+  bias; fix bias before adding features.
+- Bagging three fits (recipe_bag3) cuts the seed spread from 0.011 to 0.003 and moves the
+  mean by +0.003 [r104 vs r107]; use the bagged base so later changes are judged against a
+  ~0.005 bar, not 0.022.
 - Bias and scale first: the recipe's bias is -2% to -5% on most windows; at the total that
   is most of the error. Per-series scaled targets or a per-store x department calibration
   from the last 28 days [recipe m5_all folds; SPEC_v4 lever 1].

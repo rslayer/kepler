@@ -386,6 +386,18 @@ class LGBMRecipeScaled(LGBMRecipeBag3):
         return super()._fit_predict(scaled, predict, seed) * self._scale(predict)
 
 
+class LGBMRecipeMomentum(LGBMRecipeScaled):
+    """Bias fix 2: momentum ratios at the origin (7/28, 28/56, 28/180-day level ratios) on
+    top of the ratio target, so the model can lift or lower a forecast for a series whose
+    level is moving."""
+
+    name = "recipe_momentum"
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + ["mom_7_28", "mom_28_56", "mom_28_180"]
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -402,6 +414,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
     LGBMRecipeScaled.name: LGBMRecipeScaled,
+    LGBMRecipeMomentum.name: LGBMRecipeMomentum,
 
 
     LGBMXmasThanksgivingDept.name: LGBMXmasThanksgivingDept,

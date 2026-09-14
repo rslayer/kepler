@@ -192,6 +192,13 @@ def asof_features(panel: Panel, origin_pos: int) -> dict[str, np.ndarray]:
     out["days_since_last_sale"] = np.where(last_idx >= 0, origin_pos - last_idx, 2000).astype(np.float32)
     # zero-run length ending at origin-1 (0 if the last day had a sale)
     out["zero_run_length"] = np.where(last_idx >= 0, origin_pos - 1 - last_idx, origin_pos).astype(np.float32)
+    # Bias fix 2 (SPEC_v4 lever 1b): momentum ratios at the origin — short over long level,
+    # so a rising or falling series is visible to the model as a ratio, not a level.
+    def _ratio(a, b):
+        return np.where(b > 0, a / np.maximum(b, 1e-9), 1.0).astype(np.float32)
+    out["mom_7_28"] = _ratio(out["roll_mean_7"], out["roll_mean_28"])
+    out["mom_28_56"] = _ratio(out["roll_mean_28"], out["roll_mean_56"])
+    out["mom_28_180"] = _ratio(out["roll_mean_28"], out["roll_mean_180"])
     return out
 
 
