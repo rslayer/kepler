@@ -67,12 +67,11 @@ score-holdout:
 
 # Frozen baseline: the ref whose frozen-file contents are authoritative. Move it
 # (re-tag) whenever the human legitimately changes a frozen file, e.g.
-#   git tag -f v4-partc <commit-with-the-new-frozen-state>
-# NOTE: as of this change v4-partc is stale — src/score_holdout.py was legitimately
-# updated in 140f4d6 (wrmsse_hier yardstick) after the tag. Re-point FROZEN_REF (or
-# re-tag) to a commit whose frozen files match the intended baseline before relying on
-# `make verify-frozen`; otherwise it will (correctly, now) report that divergence.
-FROZEN_REF ?= v4-partc
+#   git tag -f v5-parta <commit-with-the-new-frozen-state>
+# v5-parta (2026-09-14) supersedes the stale v4-partc: score_holdout.py's wrmsse_hier
+# yardstick column, the evaluation-label quarantine in adapters/m5.py, and backtest.py's
+# --reparent path, per-dataset budgets and v5 seed bagging are all in the baseline now.
+FROZEN_REF ?= v5-parta
 
 # Every file whose contents the harness's integrity depends on. This must include not
 # just the scorer but everything that FEEDS it: the fold logic + keep rule (backtest),

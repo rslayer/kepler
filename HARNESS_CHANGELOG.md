@@ -15,7 +15,20 @@ fold's `seed_mean`. The keep rule reads a bagged parent's bagged headline (and r
 `parent_bagged` / `child_bagged`); a bagged child of an unbagged parent is allowed but is
 a different statistic and is flagged. Fold logic untouched. Frozen this session and
 unchanged: scorer.py, scorer_hier.py, report.py, score_holdout.py, scoring.py, tiers.json.
-**Results:** (filled in below when the Part A runs land.)
+**Results (m5_3 screen, r114–r116).** Baseline bagged hier **0.670844** (per-seed mean
+0.671176, spread 0.003027); recipe bagged hier **0.648900** (per-seed mean 0.651377, spread
+0.011121); bagged gain 0.021944. Two bagged baseline invocations (r114, r116) are identical
+to six decimals on every metric, spread and fold; config hash b4eec26e00ec. **The recipe
+does not clear the keep rule on the screen:** condition 1 fails by 0.0003 (gain 0.021944 vs
+threshold 0.022242 = 2 x the recipe's single-seed spread, which bagging leaves unchanged by
+design), and condition 2 fails on folds 5–8 (+0.035, +0.032, +0.058, +0.022 against
+tolerances 0.006–0.054): the recipe loses the calm late-winter folds at the aggregate
+levels — a real, repeatable loss (r104, r107, r108, r115), not seed noise. Bagging moved the
+headline by 0.002–0.003, i.e. the seed noise it removes was never the reason the screen
+rejects the recipe. Stopped for human review before Part B, as the spec directs; the keep
+rule was not loosened. Note for that review: the honest noise floor of a bagged forecast is
+the spread across bagged replicates (recipe_bag3, r107: 0.0027 across three seed triples),
+not the single-seed spread — but even with that threshold condition 2 still fails.
 
 ## v4 (Parts A–C, E partial) — 2026-09-14 (tag `v4-partc`, SPEC_v4_quality.md)
 
