@@ -1,26 +1,37 @@
 {
   "m5_ca1": {
     "dataset": "m5_ca1",
-    "model_name": "lgbm_xmas0",
-    "git_tag": "champion/m5_ca1/v1",
-    "config_hash": "b759aafd2f04",
-    "backtest_run": "r037",
-    "backtest_wrmsse": 0.805456,
+    "model_name": "lgbm_xmas0_tgd",
+    "git_tag": "champion/m5_ca1/v2",
+    "config_hash": "7bac85da4bce",
+    "backtest_run": "r060",
+    "backtest_wrmsse": 0.804787,
     "holdout_wrmsse": 0.788779,
-    "promoted_at": "2026-09-13T13:16:21+00:00",
+    "promoted_at": "2026-09-14T01:31:46+00:00",
     "promoted_by": "tools/promote.py (human-run)",
     "previous": {
       "dataset": "m5_ca1",
-      "model_name": "lgbm_baseline",
-      "git_tag": "v1-harness",
-      "config_hash": "900159c6f3dd",
-      "backtest_run": "r033",
-      "backtest_wrmsse": 0.810828,
+      "model_name": "lgbm_xmas0",
+      "git_tag": "champion/m5_ca1/v1",
+      "config_hash": "b759aafd2f04",
+      "backtest_run": "r037",
+      "backtest_wrmsse": 0.805456,
       "holdout_wrmsse": 0.788779,
-      "holdout_note": "scored 2026-09-13 by the human (make score-holdout MODEL=lgbm_baseline): 0.788779 on the m5_ca1 holdout 2016-03-28..04-24",
-      "promoted_at": "2026-09-13T05:28:45+00:00",
-      "promoted_by": "human (seed, SPEC_v3 Part B)",
-      "previous": null
+      "promoted_at": "2026-09-13T13:16:21+00:00",
+      "promoted_by": "tools/promote.py (human-run)",
+      "previous": {
+        "dataset": "m5_ca1",
+        "model_name": "lgbm_baseline",
+        "git_tag": "v1-harness",
+        "config_hash": "900159c6f3dd",
+        "backtest_run": "r033",
+        "backtest_wrmsse": 0.810828,
+        "holdout_wrmsse": 0.788779,
+        "holdout_note": "scored 2026-09-13 by the human (make score-holdout MODEL=lgbm_baseline): 0.788779 on the m5_ca1 holdout 2016-03-28..04-24",
+        "promoted_at": "2026-09-13T05:28:45+00:00",
+        "promoted_by": "human (seed, SPEC_v3 Part B)",
+        "previous": null
+      }
     }
   },
   "m5_all": {
