@@ -47,7 +47,7 @@ OUT="$REPO/runs/cycle-logs/$RS"; mkdir -p "$OUT"
 echo "cycle $RS on $DATASET (researcher cap ${HOURS}h); logs in runs/cycle-logs/$RS/"
 
 # ---------------------------------------------------------------- helpers
-GUARD='Do not read, list, or reference anything under holdout/. Never edit src/scorer.py, src/report.py, src/backtest.py, tools/, Makefile, or anything above the RULES marker in CLAUDE.md. Never commit to main. Nobody else is working in this repository. Each `make backtest` takes about five minutes: run it and wait for it to finish before doing anything else.'
+GUARD='Do not read, list, or reference anything under holdout/, or the evaluation-label files under data/*/raw/ (sales_train_evaluation.csv, sample_submission.csv, any column d_1914+); those are the held-out answers. Never edit any frozen file (run `make verify-frozen` to see the set: scorer.py, report.py, score_holdout.py, scorer_hier.py, backtest.py, scoring.py, data.py, contract.py, adapters/m5.py), tools/, Makefile, or anything above the RULES marker in CLAUDE.md. Never commit to main. Nobody else is working in this repository. Each `make backtest` takes about five minutes: run it and wait for it to finish before doing anything else.'
 # Permission patterns match the command's first word, so env-var-prefixed forms need their
 # own entries (the adversary's rerun is `KEPLER_RUNS_DIR=adversary/reruns make backtest ...`).
 COMMON_TOOLS='Read,Glob,Grep,Edit,Write,Bash(make:*),Bash(KEPLER_RUNS_DIR=*),Bash(UV_SYSTEM_CERTS=*),Bash(git:*),Bash(python:*),Bash(python3:*),Bash(.venv/bin/python:*),Bash(uv:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(wc:*),Bash(awk:*),Bash(sed:*),Bash(sort:*),Bash(cut:*),Bash(date:*),Bash(diff:*),Bash(mkdir:*),Bash(cp:*),Bash(rm:*),Bash(for:*),Bash(cd:*)'
@@ -84,7 +84,7 @@ PY
   fi
   # integrity after every session
   git checkout -q main
-  make verify-frozen >/dev/null || { echo "ABORT: frozen files or Rules block changed after $sid"; exit 4; }
+  make verify-frozen || { echo "ABORT: frozen files or Rules block changed after $sid"; exit 4; }
   return $rc
 }
 

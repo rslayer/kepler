@@ -15,6 +15,7 @@ Nothing here reads, prints, or moves ~/.kaggle/*; the Kaggle CLI handles its own
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -199,6 +200,17 @@ class M5Adapter:
             write_manifest(self.holdout_dir, ("sales.parquet",))
             print(f"holdout {self.dataset_id}: {day_cols[0]}..{day_cols[-1]} ({len(held)} series) -> {self.holdout_dir}/sales.parquet")
             print("visible snapshot untouched (competition setup). Commit holdout/<id>/MANIFEST.txt is NOT tracked; nothing to commit.")
+            # Quarantine the raw evaluation file: it holds the true d_1914-d_1941 answers
+            # and otherwise sits readable in data/<id>/raw/, outside the only directory
+            # agents are told to avoid. Move it under holdout/ (forbidden + gitignored).
+            # The backtest never needs it (it uses sales_train_validation); score_holdout
+            # reads the parquet just written, not this csv.
+            src_eval = self.raw / "sales_train_evaluation.csv"
+            if src_eval.exists():
+                q = self.holdout_dir / "raw"
+                q.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src_eval), str(q / "sales_train_evaluation.csv"))
+                print(f"quarantined sales_train_evaluation.csv -> {q}/ (held-out answers, not agent-visible)")
             return
         sales, calendar, _ = self._native()
         if self.is_cut(sales, calendar):
