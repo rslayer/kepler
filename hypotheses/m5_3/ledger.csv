@@ -1,1 +1,8 @@
 hypothesis_id,status,summary,first_run,last_run,sessions,evidence
+H141,kept,Seed-averaged forecasts: recipe_bag3 = mean of 3 sub-seed fits of recipe6_calendar_l2,r107,r108,lever-20260914-1,hier 0.648 vs recipe 0.651; spread 0.011 -> 0.0027. vs baseline r103 (r108 reparent) gain 0.023 but folds 5-8 regress; working base for the bias chain
+H142,discarded,Bias fix 1: ratio target y / roll_mean_28 on the bagged recipe,r109,r109,lever-20260914-1,hier 0.689 vs 0.648; bias +2.7% on every fold; low-volume ratios dominate the L2 loss
+H143,discarded,Bias fix 2: momentum ratios mom_7_28/28_56/28_180 on the bagged recipe,r110,r110,lever-20260914-1,"hier 0.645 vs 0.648, gain 0.0028 < bar 0.0055; fold 2 regresses; bias unchanged"
+H144,discarded,Bias fix 1b: ratio target with level-proportional sample weights,r111,r112,lever-20260914-1,"r111 invalid (bypassed the direct loop, timeout). r112 hier 0.655 vs 0.648, bias +1.6%: fixes calm folds 4-6,8 by 0.03-0.04, breaks post-holiday folds 2,3 and fold 7 by 0.05-0.07; spread 0.007"
+H145,running,Bias fix 4: per store x dept calibration on the validation window (recipe_calib),,,lever-20260914-1,"factor (sum y + 200)/(sum pred + 200) per store x dept over the 28 days before the origin, clipped [0.8,1.25]; no extra fit"
+H146,untried,"Ratio target with an event-robust scale (median of 8 same-weekday values, or 56-day mean excluding flagged event days)",,,,r112 shows the ratio target wins calm folds and loses post-holiday ones because December inflates roll_mean_28
+H147,untried,Per-store models on the bagged recipe (ingredient 7),,,,SPEC_v4 Part C; untested on any tier
