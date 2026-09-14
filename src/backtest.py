@@ -433,9 +433,47 @@ def run_backtest(
     return row
 
 
+def reparent(run_id: str, parent_id: str, author: str, session: str) -> dict:
+    """Log a new row that re-evaluates an existing run's keep rule against a different
+    parent, from its recorded per-seed, per-fold metrics. No fit is made; the fits are
+    deterministic and the forecasts' scores are exactly the detail file's. Use when a run
+    was logged against an intermediate parent and the comparison that matters is against
+    the champion (or vice versa)."""
+    src = ROOT / "runs" / "detail" / f"{run_id}.json"
+    if not src.exists():
+        raise SystemExit(f"no detail for {run_id}")
+    d = json.loads(src.read_text())
+    if d.get("status") != "ok" or "seeds" not in d:
+        raise SystemExit(f"{run_id} must be an ok v1+ run")
+    parent = load_parent(parent_id)
+    seeds = [int(s) for s in d["seeds"]]
+    metric = d.get("metric", "wrmsse")
+    row = {k: "" for k in RUN_COLUMNS}
+    new_id = next_run_id()
+    keys = METRIC_KEYS + ([HIER_KEY] if metric == HIER_KEY else [])
+    for k in keys:
+        vals = [d["seeds"][str(sd)]["aggregate"][k] for sd in seeds]
+        row[k] = f"{float(np.mean(vals)):.6f}"; row[f"{k}_spread"] = f"{float(max(vals) - min(vals)):.6f}"
+    row.update(run_id=new_id, timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"), git_commit=git_commit(),
+               model_name=d["model_name"], config_hash=config_hash({"model": d["config"], "seeds": seeds, "folds": len(d["folds"]),
+                                                                    "fold_spacing": d.get("fold_spacing", FOLD_SPACING)}),
+               fold_count=len(d["folds"]), fold_spacing=d.get("fold_spacing", FOLD_SPACING), seconds="0.0", status="ok",
+               findings_file=f"findings/{new_id}.md", author=author, session=session, hypothesis_id=d.get("hypothesis_id", ""),
+               dataset=d.get("dataset", ""))
+    kr = keep_rule(row, d["folds"], parent, metric)
+    row["verdict"] = kr["verdict"]
+    out = dict(d); out.update(run_id=new_id, keep_rule=kr, reparent_of=run_id, author=author, session=session)
+    (ROOT / "runs" / "detail" / f"{new_id}.json").write_text(json.dumps(out, indent=2, default=str))
+    append_run(row)
+    print(f"logged {new_id}: {d['model_name']} on {d.get('dataset')} re-evaluated against {parent_id} (from {run_id}'s forecasts)")
+    print_keep_rule(kr)
+    return row
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rolling-origin backtest")
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--reparent", default=None, help="existing run_id: re-evaluate its keep rule against --parent, no fit")
+    parser.add_argument("--model", required=False, default=None)
     parser.add_argument(
         "--seeds", default=",".join(map(str, SEEDS)),
         help=f"comma-separated seeds, default {','.join(map(str, SEEDS))}",
@@ -448,6 +486,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument("--jobs", type=int, default=1, help="worker processes for the (fold, seed) fits")
     args = parser.parse_args(argv)
+    if args.reparent:
+        if not args.parent:
+            raise SystemExit("--reparent needs --parent")
+        reparent(args.reparent, args.parent, args.author, args.session)
+        return 0
     if args.author == "researcher" and not (args.session and args.hypothesis):
         raise SystemExit(
             "researcher runs must name SESSION=<role>-<YYYYMMDD>-<n> and HYPOTHESIS=<H### from "
