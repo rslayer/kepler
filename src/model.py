@@ -190,6 +190,12 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
     def extra_config(self) -> dict:
         return {**super().extra_config(), "early_stopping": self.EARLY_STOPPING_ROUNDS, "validation": "newest_origin"}
 
+    def _row_weights(self, train: pd.DataFrame):
+        """Per-row sample weights for the fit, or None. Called on the exact frame each
+        model is fit on (after the direct per-week split), so subclasses may derive the
+        weights from the frame's own columns."""
+        return None
+
     def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
         import lightgbm as lgb
 
@@ -209,9 +215,12 @@ class LGBMRecipe1Capacity(LGBMChristmasZero):
             cats = x_tr[col].cat.categories
             x_va = x_va.assign(**{col: pd.Categorical(x_va[col], categories=cats)})
             x_pred[col] = pd.Categorical(x_pred[col], categories=cats)
+        # optional per-row sample weights (subclass hook); None = plain unweighted fit
+        w = self._row_weights(train)
+        fit_kw = {} if w is None else {"sample_weight": w[~val_mask], "eval_sample_weight": [w[val_mask]]}
         model = lgb.LGBMRegressor(**params)
         model.fit(x_tr, y_tr, eval_set=[(x_va, y_va)], categorical_feature=categorical,
-                  callbacks=[lgb.early_stopping(self.EARLY_STOPPING_ROUNDS, verbose=False)])
+                  callbacks=[lgb.early_stopping(self.EARLY_STOPPING_ROUNDS, verbose=False)], **fit_kw)
         self.last_best_iteration = int(model.best_iteration_ or params["n_estimators"])
         return model.predict(x_pred, num_iteration=model.best_iteration_)
 
@@ -401,49 +410,18 @@ class LGBMRecipeMomentum(LGBMRecipeBag3):
 class LGBMRecipeScaledW(LGBMRecipeScaled):
     """Bias fix 1b: the ratio target with level-proportional sample weights (weight = the
     scale), so the L2 loss on ratios is a level-weighted loss and high-volume series keep
-    their importance — the unweighted ratio target (r109) let low-volume series' noisy
-    ratios dominate and over-forecast by +2.7%."""
+    their importance -- the unweighted ratio target (r109) let low-volume series' noisy
+    ratios dominate and over-forecast by +2.7%. The weights enter through the capacity
+    fit's _row_weights hook, so the direct per-week models and the 3-bag are unchanged.
+    (r111, the first attempt, bypassed both loops and timed out; it is not a result.)"""
 
     name = "recipe_scaled_w"
 
-    def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
-        import lightgbm as lgb
-        s_tr = self._scale(train)
-        scaled = train.assign(y=train["y"].to_numpy(dtype=float) / s_tr)
-        self._sample_weight = s_tr
-        try:
-            return LGBMRecipe1Capacity._fit_predict_weighted(self, scaled, predict, seed, s_tr) * self._scale(predict)
-        finally:
-            self._sample_weight = None
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "sample_weight": self.SCALE_FEATURE}
 
-
-def _fit_predict_weighted(self, train, predict, seed, weight):
-    """LGBMRecipe1Capacity._fit_predict with per-row sample weights (bag-aware via Bag3)."""
-    import lightgbm as lgb
-    preds = []
-    for k in range(getattr(self, "BAG", 1)):
-        sd = seed + 1000 * k
-        params = dict(self.PARAMS); params.update(random_state=sd, seed=sd, bagging_seed=sd, feature_fraction_seed=sd)
-        features = self.features
-        categorical = [c for c in features if c in CATEGORICAL_COLUMNS]
-        origin_of_row = train["date"] - pd.to_timedelta(train["horizon"].astype(int) - 1, unit="D")
-        val_mask = (origin_of_row == origin_of_row.max()).to_numpy()
-        x_all = train[features]
-        x_tr, y_tr, w_tr = x_all[~val_mask], train["y"][~val_mask], weight[~val_mask]
-        x_va, y_va, w_va = x_all[val_mask], train["y"][val_mask], weight[val_mask]
-        x_pred = predict[features].copy()
-        for col in categorical:
-            cats = x_tr[col].cat.categories
-            x_va = x_va.assign(**{col: pd.Categorical(x_va[col], categories=cats)})
-            x_pred[col] = pd.Categorical(x_pred[col], categories=cats)
-        model = lgb.LGBMRegressor(**params)
-        model.fit(x_tr, y_tr, sample_weight=w_tr, eval_set=[(x_va, y_va)], eval_sample_weight=[w_va],
-                  categorical_feature=categorical, callbacks=[lgb.early_stopping(self.EARLY_STOPPING_ROUNDS, verbose=False)])
-        preds.append(model.predict(x_pred, num_iteration=model.best_iteration_))
-    return np.mean(preds, axis=0)
-
-
-LGBMRecipe1Capacity._fit_predict_weighted = _fit_predict_weighted
+    def _row_weights(self, train: pd.DataFrame):
+        return self._scale(train)
 
 
 MODELS: dict[str, type] = {
