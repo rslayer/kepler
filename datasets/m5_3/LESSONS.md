@@ -8,3 +8,7 @@ Dataset-specific confirmed findings. Same rules as the general LESSONS.md. Nothi
   the trade [r109, r112 vs r107].
 - Momentum ratios (7/28, 28/56, 28/180 days) add nothing on top of the lags and rolling
   means: gain 0.003 inside the bar, bias unchanged [r110 vs r107].
+- A multiplicative per store x department correction estimated on the 28 days before the
+  origin (actual / predicted, shrunk and clipped) lowers the overall bias but worsens the
+  hierarchical score on 7/8 folds: the model's recent errors do not persist into the
+  forecast window, and after the holidays the window still carries December [r113 vs r107].
