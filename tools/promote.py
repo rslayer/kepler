@@ -144,7 +144,11 @@ def main(argv: list[str]) -> int:
     if champ.get("holdout_wrmsse") is None:
         return refuse(4, f"champion {champ['model_name']} has no holdout score for {dataset}; human must run "
                          f"`make score-holdout MODEL={champ['model_name']} DATASET={dataset}` first")
-    hold = float(mine[-1]["wrmsse"])
+    # hierarchical datasets are judged on the 12-level yardstick
+    hier = bool(json.loads((ROOT / "tiers.json").read_text()).get("tiers", {})) and dataset in ("m5_all", "m5_3")
+    metric_col = "wrmsse_hier" if hier and mine[-1].get("wrmsse_hier") else "wrmsse"
+    hold = float(mine[-1][metric_col])
+    print(f"condition 4: holdout metric {metric_col}")
     if hold > float(champ["holdout_wrmsse"]):
         return refuse(4, f"holdout {hold:.6f} is worse than champion's {float(champ['holdout_wrmsse']):.6f}")
     rel = "equals" if hold == float(champ["holdout_wrmsse"]) else "<"
