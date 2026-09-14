@@ -15,7 +15,7 @@ Domain notes:
 - On m5_all the M5 recipe (capacity + direct multi-horizon + rolling stats + price + calendar,
   L2 objective) scored hier 0.698 vs the baseline's 0.785, better on all 8 folds, while
   moving the item level only 0.862 -> 0.851. The one-store item-level screen (m5_ca1) had
-  rejected every ingredient. [r063 vs the recipe run on m5_all]
+  rejected every ingredient. [r083 vs the recipe run on m5_all]
 
 Priors (what to try first; every line cites a run id or a LESSONS line):
 - Bias and scale first: the recipe's bias is -2% to -5% on most windows; at the total that

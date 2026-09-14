@@ -1,5 +1,5 @@
 {
-  "run_id": "r067",
+  "run_id": "r087",
   "model_name": "recipe2_tweedie",
   "dataset": "m5_ca1",
   "metric": "wrmsse",
@@ -69,7 +69,7 @@
     }
   ],
   "keep_rule": {
-    "parent": "r066",
+    "parent": "r086",
     "verdict": "discarded",
     "reason": "run status timeout"
   },
