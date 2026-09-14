@@ -80,6 +80,9 @@ Per branch:
   independent check, rerun with two seeds the harness did not use:
       git checkout exp/<b> -- src/features.py src/model.py
       KEPLER_RUNS_DIR=adversary/reruns make backtest MODEL=<model_name> DATASET=<dataset> SEEDS=11,99 AUTHOR=adversary SESSION=<your session id>
+  (Since harness v5 `make backtest` refuses a dirty tree when logging to the canonical runs/;
+  the KEPLER_RUNS_DIR redirect above is exempt, so the checked-out branch files do not block
+  the rerun. Never drop the redirect.)
       git checkout main -- src/features.py src/model.py
   FAIL if the paired gain over the parent is smaller than max(logged spread, rerun spread).
   Under v5 the headline gain is between two bagged forecasts while the spreads are
