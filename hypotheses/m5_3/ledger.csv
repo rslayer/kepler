@@ -6,3 +6,5 @@ H144,discarded,Bias fix 1b: ratio target with level-proportional sample weights,
 H145,discarded,Bias fix 4: per store x dept calibration on the validation window (recipe_calib),r113,r113,lever-20260914-1,"hier 0.673 vs 0.648, worse on 7/8 folds (fold 2 +0.065); overall bias -0.37% -> -0.20%; validation-window errors do not persist into the forecast window"
 H146,untried,"Ratio target with an event-robust scale (median of 8 same-weekday values, or 56-day mean excluding flagged event days)",,,,r112 shows the ratio target wins calm folds and loses post-holiday ones because December inflates roll_mean_28
 H147,untried,Per-store models on the bagged recipe (ingredient 7),,,,SPEC_v4 Part C; untested on any tier
+H150,running,v5 Part A: lgbm_baseline with seed-averaged forecasts (bag_seeds on) — the bagged screen baseline,,,v5-parta-20260914,"harness lever, not a model change; twice for determinism"
+H151,running,v5 Part A: recipe6_calendar_l2 with seed-averaged forecasts vs the bagged baseline — does the screen certify the recipe?,,,v5-parta-20260914,"SPEC_v5 Part A acceptance: gain vs 2 x spread, no fold regresses, bias guardrail"

@@ -1,5 +1,22 @@
 # Harness changelog
 
+## v5 Part A — seed-averaged forecasts — 2026-09-14 (SPEC_v5_certifiable.md; tag `v5-parta`)
+
+Until v4 a backtest fitted once per seed and scored the three forecasts separately, so the
+headline metric carried the full seed-to-seed spread (0.011–0.016 for the recipe on the
+hierarchical screen, larger than the real gain of ~0.020). Since this part the three
+per-seed forecasts are averaged per series and day and that one forecast is scored
+(`bag_seeds`, `--bag-seeds on|off`, Makefile `BAG=`, default on; off reproduces v1–v4
+runs bit for bit and keeps their config hash). `<metric>_spread` keeps its meaning (max
+minus min of the three single-seed scores, pre-bagging) so the adversary's noise-floor
+check has its input. `bagged` is a new column in runs.csv (migration v5; every earlier row
+is False) and a field in the detail JSON, which also carries `bagged_aggregate` and each
+fold's `seed_mean`. The keep rule reads a bagged parent's bagged headline (and records
+`parent_bagged` / `child_bagged`); a bagged child of an unbagged parent is allowed but is
+a different statistic and is flagged. Fold logic untouched. Frozen this session and
+unchanged: scorer.py, scorer_hier.py, report.py, score_holdout.py, scoring.py, tiers.json.
+**Results:** (filled in below when the Part A runs land.)
+
 ## v4 (Parts A–C, E partial) — 2026-09-14 (tag `v4-partc`, SPEC_v4_quality.md)
 
 **Part A.** `m5_all` adapter (all 10 stores, 30,490 series; compact wide snapshot; the
