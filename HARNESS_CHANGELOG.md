@@ -69,6 +69,24 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v5 Part B — per-series bias correction — 2026-09-14/15 (SPEC_v5 Part B)
+
+`series_correction()` in src/model.py: after prediction, a per-series multiplicative factor
+1 + shrink x (actual / predicted over the 28-day validation window − 1), clipped to
+[0.5, 2.0], shrink 0.5; the window is the newest simulated origin's rows, which the fold's
+models never train on, so the correction is leak-free and role-free (keyed on the contract's
+series id). Config-controlled (`CORRECTION` on the model class, in the config hash), default
+OFF; `recipe6_calendar_l2_corr` is the one-variable ON model. **Results:** m5_3, both bagged:
+OFF r115 hier 0.648900 / bias −0.45%; ON r117 hier **0.661308** / bias **+3.07%** —
+discarded on all three conditions (gain −0.012; folds 2 and 8 regress by 0.029 and 0.058;
+guardrail 0.031 > 0.025). The correction helps the two calm folds where the recipe
+under-forecasts most and hurts the other six; it is the same failure as the store x
+department calibration (r113): the model's errors on the last 28 in-sample days do not
+persist into the forecast window. m5_all: the bagged correction-OFF reference is r118, hier
+**0.695249** (per-seed mean 0.698220 = r106), bias −0.86%; the correction-ON run on m5_all
+was skipped by the human after r117 (95 minutes saved for Part C). Branch exp/r117 labels
+the correction commit; correction stays OFF for Part C.
+
 ## v3 field notes — cycle 2 (2026-09-13), first headless cycle
 
 Run by `tools/cycle.sh m5_ca1 3` after the human renewed the CLI login (the first attempt
