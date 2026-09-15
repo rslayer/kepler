@@ -3,7 +3,11 @@
 
 SHELL := /bin/bash
 UV := UV_SYSTEM_CERTS=1 uv
-PY := UV_SYSTEM_CERTS=1 uv run --
+# macOS: this laptop idle-sleeps after 1 minute unless a process holds it awake (pmset -g);
+# a backtest lost a night's benchmark to that. caffeinate -i keeps the machine awake for the
+# duration of the command; no-op where caffeinate does not exist (Linux boxes).
+CAFF := $(shell command -v caffeinate 2>/dev/null)
+PY := UV_SYSTEM_CERTS=1 $(if $(CAFF),$(CAFF) -i,) uv run --
 
 MODEL ?=
 DATASET ?= m5_3
