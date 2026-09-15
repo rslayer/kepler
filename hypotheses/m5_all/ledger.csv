@@ -1,3 +1,4 @@
 hypothesis_id,status,summary,first_run,last_run,sessions,evidence
-H153,running,v5 Part B reference: recipe6_calendar_l2 bagged (bag_seeds on) on m5_all — the bagged confirmation-tier number for the recipe,,,v5-partb-20260914,unbagged r106: hier 0.698 vs baseline 0.785
-H154,running,v5 Part B: per-series correction ON vs OFF on m5_all (child of H153),,,v5-partb-20260914,
+H153,kept,v5 Part B reference: recipe6_calendar_l2 bagged (bag_seeds on) on m5_all — the bagged confirmation-tier number for the recipe,r118,r118,v5-partb-20260914,unbagged r106: hier 0.698 vs baseline 0.785
+H154,skipped,v5 Part B: per-series correction ON vs OFF on m5_all (child of H153),,,v5-partb-20260914,not run: human decision after r117 (m5_3) discarded the correction decisively; 95 min saved for Part C
+H156,running,"v5 Part C: per-store recipe vs global recipe on m5_all, bagged",,,v5-partc-20260914,base r118
