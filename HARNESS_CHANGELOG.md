@@ -69,6 +69,23 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v5 Part C — per-store models (recipe ingredient 7) — 2026-09-15 (tag `v5-partc`)
+
+`roles["partition"]` (store_id on M5; src/adapters/m5.py, both layouts) is bound as
+`features.PARTITION_COLUMN`; `recipe6_per_store` fits one recipe chain per partition and
+concatenates the predictions (role-driven; refuses a dataset without the role). Frames now
+carry every series attribute as plain columns (not features). **Results, bagged, correction
+OFF:** m5_3 r119 hier **0.637942** vs global r115 0.648900 — better on 7/8 folds, no fold
+regresses, bias guardrail passes, aggregate seed spread **0.0011 vs 0.0111** — discarded on
+condition 1 alone (gain 0.011 < 2 x the *parent's* spread 0.022). m5_all r120 hier
+**0.702771** vs global r118 0.695249 — worse (fold 2 +0.047, bias −2.0% vs −0.9%),
+discarded. The screen gain does not transfer to ten stores: cross-store pooling wins.
+Wall clock equal to the global model (288 / 960 smaller fits). Keep rule unchanged. Observation
+for the human: a child ten times less noisy than its parent cannot clear a bar set by the
+parent's noise (r119); SPEC_v5 forbids loosening the rule in this session, so it is recorded
+here, not acted on. Frozen set: adapters/m5.py changed (partition role) → re-tag `v5-partc`,
+FROZEN_REF moved; the five session-frozen files remain byte-identical to v4-partc.
+
 ## v5 Part B — per-series bias correction — 2026-09-14/15 (SPEC_v5 Part B)
 
 `series_correction()` in src/model.py: after prediction, a per-series multiplicative factor
