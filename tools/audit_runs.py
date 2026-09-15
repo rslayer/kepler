@@ -25,7 +25,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(); ap.add_argument("--runs-dir", default="runs"); a = ap.parse_args(argv)
     rd = ROOT / a.runs_dir
     rows = list(csv.DictReader((rd / "runs.csv").open()))
-    problems: list[str] = []; unresolved: list[str] = []; reviews = 0
+    problems: list[str] = []; unresolved: list[str] = []; reviews = 0; documented_lost: list[str] = []
     for r in rows:
         rid = r["run_id"]; p = rd / "detail" / f"{rid}.json"
         is_review = "/" in r.get("model_name", "")  # adversary verdict rows (exp/<b>, curator/<s>) and human override rows
@@ -34,6 +34,9 @@ def main(argv=None) -> int:
         if not p.exists():
             if r.get("status") == "error" or is_review:
                 continue  # error rows and review rows never write detail
+            fp = ROOT / "findings" / f"{rid}.md"
+            if fp.exists() and any(w in fp.read_text().lower() for w in ("lost", "renumber")):
+                documented_lost.append(rid); continue  # detail lost in the v4 renumbering, findings says so
             problems.append(f"{rid}: no detail JSON (status={r.get('status') or 'EMPTY'})"); continue
         d = json.loads(p.read_text())
         if d.get("run_id") != rid:
@@ -70,6 +73,8 @@ def main(argv=None) -> int:
         print(f"v4_run_id_map.json: {len(m)} entries, all targets present: {not missing}")
     print(f"{len(rows)} rows audited ({reviews} adversary/human review rows carry no detail by design); "
           f"{len(problems)} row/detail mismatches; {len(unresolved)} unresolvable commit hashes")
+    if documented_lost:
+        print(f"  NOTE: detail lost in the v4 renumbering (documented in findings, identical reruns exist): {', '.join(documented_lost)}")
     for x in problems: print("  MISMATCH", x)
     for x in unresolved: print("  UNRESOLVED", x)
     return 1 if (problems or unresolved) else 0

@@ -69,6 +69,25 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v5 Parts D & E — parallel benchmark + audit — 2026-09-15 (tag `v5-certifiable`)
+
+**Part D.** m5_all baseline timed at JOBS 1/3/4/7 on this laptop (Apple M4 Max, 14 cores):
+44.7 / 28.3 / 28.4 / 53.3 min. Best speedup 1.58x at JOBS=3; more workers oversubscribe
+(4-thread fits x 3 already fills 14 cores, and the 12-level scorer is single-threaded between
+folds). Rule: `JOBS = floor(cores/4)`. Results identical across worker counts to six decimals.
+tools/cloud/BENCHMARK.md has the table, the cost model ($0.70/run agent tokens; 200-run
+m5_all cycle ~$140 laptop / ~$216 cloud) and the not-an-idle-machine caveat. Also this
+session: the laptop idle-sleeps after 1 minute even on AC and killed the first benchmark
+overnight; `make backtest` and cycle.sh now wrap the run in `caffeinate -i` on macOS.
+
+**Part E.** `make backtest` refuses a dirty tree when logging to the canonical runs/ (adversary
+KEPLER_RUNS_DIR reruns exempt), so no run is logged with a -dirty hash. tools/audit_runs.py
+reconciles every row against its detail JSON and resolves its commit hash: 120 rows, 0
+unresolvable hashes, 0 mismatches; r032's row (shifted six columns when the v1 migration
+missed a Part-B-layout row) realigned; r100-r102's detail JSONs, lost in the v4 renumbering,
+report as a documented NOTE (findings say so; identical reruns are r103/r104/r106).
+v4_run_id_map.json verified complete (23 entries). RESULTS.md rewritten for v5.
+
 ## v5 Part C — per-store models (recipe ingredient 7) — 2026-09-15 (tag `v5-partc`)
 
 `roles["partition"]` (store_id on M5; src/adapters/m5.py, both layouts) is bound as
