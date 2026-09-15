@@ -400,6 +400,45 @@ class LGBMRecipe6CalendarL2Corr(LGBMRecipe6CalendarL2):
         return {**super().extra_config(), "series_correction": dict(self.CORRECTION)}
 
 
+class LGBMRecipe6PerStore(LGBMRecipe6CalendarL2):
+    """v5 Part C (recipe ingredient 7): one model chain per partition (roles["partition"],
+    store_id on M5) instead of one global model. Every other setting is recipe6_calendar_l2:
+    each partition gets its own direct per-week fits with early stopping on its own newest
+    origin. Predictions are concatenated in the predict frame's row order and scored by the
+    same frozen scorer. Role-driven: refuses a dataset that declares no partition."""
+
+    name = "recipe6_per_store"
+
+    def extra_config(self) -> dict:
+        from . import features as _f
+        return {**super().extra_config(), "partition": _f.PARTITION_COLUMN}
+
+    def _fit_predict(self, train: pd.DataFrame, predict: pd.DataFrame, seed: int) -> np.ndarray:
+        from . import features as _f
+        col = _f.PARTITION_COLUMN
+        if not col:
+            raise SystemExit(f"{self.name}: the dataset declares no roles['partition']; nothing to split on")
+        tkey = train[col].astype(str).to_numpy(); pkey = predict[col].astype(str).to_numpy()
+        out = np.empty(len(predict), dtype=float)
+        for g in pd.unique(pkey):  # predict-frame order: deterministic
+            tm, pm = tkey == g, pkey == g
+            if not tm.any():
+                raise SystemExit(f"{self.name}: partition {g!r} has no training rows")
+            out[pm] = super()._fit_predict(train[tm], predict[pm], seed)
+        return out
+
+
+class LGBMRecipe6PerStoreCorr(LGBMRecipe6PerStore):
+    """Per-partition recipe with the Part B per-series correction ON (for use only if Part B
+    concludes ON)."""
+
+    name = "recipe6_per_store_corr"
+    CORRECTION = {"window": 28, "clip": [0.5, 2.0], "shrink": 0.5}
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "series_correction": dict(self.CORRECTION)}
+
+
 class LGBMRecipeBag3(LGBMRecipe6CalendarL2):
     """Lever 2 (SPEC_v4): seed-averaged forecasts. forecast(seed) is the mean of three fits
     at sub-seeds derived from `seed`, so each logged seed is already a small ensemble. The
@@ -519,6 +558,8 @@ MODELS: dict[str, type] = {
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
+    LGBMRecipe6PerStore.name: LGBMRecipe6PerStore,
+    LGBMRecipe6PerStoreCorr.name: LGBMRecipe6PerStoreCorr,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
     LGBMRecipeScaled.name: LGBMRecipeScaled,
     LGBMRecipeMomentum.name: LGBMRecipeMomentum,
