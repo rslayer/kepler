@@ -299,6 +299,7 @@ class M5Adapter:
             "price": "sell_price",
             "weight_price": "sell_price",
             "categoricals": ["item_id", "store_id"],
+            "partition": "store_id",  # v5 Part C: per-partition models (ingredient 7) split on this series attribute
             "hierarchy": [[], ["state_id"], ["store_id"], ["cat_id"], ["dept_id"],
                           ["state_id", "cat_id"], ["state_id", "dept_id"], ["store_id", "cat_id"],
                           ["store_id", "dept_id"], ["item_id"], ["item_id", "state_id"], ["item_id", "store_id"]],
@@ -360,6 +361,7 @@ class M5Adapter:
             "price": "sell_price",
             "weight_price": "sell_price",
             "categoricals": ["item_id", "store_id"],
+            "partition": "store_id",  # v5 Part C: per-partition models (ingredient 7) split on this series attribute
             "price_group": "dept_id",      # recipe ingredient 5: relative price within this group
             "series_flags": ["snap_own"],  # recipe ingredient 6: per-(series, date) flags
         }
