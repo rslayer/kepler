@@ -5,6 +5,43 @@ Mechanics test on public M5 data (Walmart store CA_1, department FOODS_3: 823 se
 
 Phases 0–3 executed 2026-09-08 to 2026-09-11. Phase 4 scored the baseline only; see item 4.
 
+## v5 state — 2026-09-15 (SPEC_v5_certifiable.md; tag `v5-certifiable`)
+
+The prototype is now a forecasting engine on the full M5 panel (all 10 stores, 30,490
+series) scored on the competition's 12-level WRMSSE, with the research loop, champion
+promotion and a live scoreboard around it. Public M5 only; nothing here is a claim about
+PepsiCo.
+
+**Accuracy (m5_all, 8-fold backtest, wrmsse_hier).** lgbm_baseline **0.785** (r083);
+the M5 recipe (capacity + Tweedie→L2 + direct multi-horizon + rolling stats + price +
+calendar) **0.698** unbagged (r106, kept on all 8 folds) and **0.695** with seed-averaged
+forecasts (r118). Human yardstick on the competition's evaluation period: baseline 0.723,
+recipe **0.626**. Kaggle field context (organisers' scores on that period): winner 0.520,
+rank 10 0.548, rank 50 0.576; benchmarks sNaive 0.847, ES_bu 0.671. The recipe therefore
+beats every published benchmark and sits between rank 50 and the statistical baselines;
+the remaining gap to the top is bias on calm months at the aggregate levels, not item-level
+error.
+
+**Does the gate pass on m5_3?** No. With seed-averaged forecasts (Part A) the recipe's
+gain over the baseline on the screen is 0.0219 against a bar of 0.0222 (2 x the recipe's
+single-seed spread, unchanged by bagging), and it regresses on the four calm late-winter
+folds by 0.02–0.06 — a real, repeatable loss (r104, r107, r108, r115), not noise. Bagging
+moved the headline by 0.003. Four bias levers (ratio target, momentum features, weighted
+ratio target, store x department calibration: r109–r113) and the Part B per-series
+correction (r117) all made it worse; per-store models (Part C) won on the 3-store screen
+(0.638 vs 0.649, r119, discarded on the parent's noise bar) and lost on all 10 stores
+(0.703 vs 0.695, r120). The keep rule was not loosened. The m5_all recipe remains a kept
+run that the screen cannot certify; promotion to champion/m5_all is a human decision.
+
+**Throughput (Part D, m5_all baseline, Apple M4 Max 14-core / 36 GB, machine otherwise
+lightly loaded).** RUNS_PER_HOUR_PENDING
+
+**Audit (Part E).** `make backtest` refuses a dirty tree when logging to runs/ (adversary
+scratch reruns exempt); `tools/audit_runs.py` reconciles rows, detail JSONs and commit
+hashes: 120 rows, 0 unresolvable hashes; r032's shifted row realigned; r100–r102's detail
+JSONs were lost in the v4 renumbering and are recorded as such (findings/r100–r102.md; the
+identical reruns are r103, r106, r104). Runs r114–r120 all carry clean hashes.
+
 ## The five numbers
 
 ### 1. Researcher runs per hour: **49**
