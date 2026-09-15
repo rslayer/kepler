@@ -33,8 +33,7 @@ correction (r117) all made it worse; per-store models (Part C) won on the 3-stor
 (0.703 vs 0.695, r120). The keep rule was not loosened. The m5_all recipe remains a kept
 run that the screen cannot certify; promotion to champion/m5_all is a human decision.
 
-**Throughput (Part D, m5_all baseline, Apple M4 Max 14-core / 36 GB, machine otherwise
-lightly loaded).** RUNS_PER_HOUR_PENDING
+**Throughput (Part D, m5_all baseline, Apple M4 Max 14-core / 36 GB, on a corporate laptop with continuous background load — not a clean idle box; see tools/cloud/BENCHMARK.md).** One backtest (24 fits): 44.7 min serial, **28.3 min at JOBS=3** (the sweet spot, JOBS = floor(cores/4)), 53.3 min oversubscribed at JOBS=7. Best speedup 1.58x, capped by 4-thread fits and single-threaded 12-level scoring. ~2 m5_all runs/hour per machine; results identical across worker counts to six decimals. Agent cost $0.70/run (sessions.csv); a 200-run m5_all cycle is ~94 h / ~$140 on the laptop, ~50 h / ~$216 on a cloud spot box.
 
 **Audit (Part E).** `make backtest` refuses a dirty tree when logging to runs/ (adversary
 scratch reruns exempt); `tools/audit_runs.py` reconciles rows, detail JSONs and commit
