@@ -57,7 +57,9 @@ run_session() {  # role session_id prompt
   started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "--- $sid start $started"
   set +e
-  claude -p "$prompt" --output-format json --permission-mode acceptEdits \
+  # keep the laptop awake for the whole session (idle sleep killed an overnight run); no-op off macOS
+  CAFF=$(command -v caffeinate 2>/dev/null) || CAFF=""
+  ${CAFF:+$CAFF -i} claude -p "$prompt" --output-format json --permission-mode acceptEdits \
     --allowedTools "$COMMON_TOOLS" > "$OUT/$sid.json" 2> "$OUT/$sid.stderr"
   rc=$?
   set -e
