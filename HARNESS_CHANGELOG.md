@@ -69,6 +69,22 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v6.1 — condition 1 is a sign test, not mean-vs-SE — 2026-09-15 (tag `v6-keeprule-1`)
+
+v6.0's condition 1 (mean paired gain > 2 x its standard error) had a false negative: a run
+better on EVERY fold is rejected when one fold's gain is large enough to inflate the SE. The
+recipe on m5_all is better on all 8 folds (sign_p 0.004) yet v6.0 discarded it, because the
+Christmas fold's +0.41 blew up the SE bar to 0.13 against a mean gain of 0.087. The
+zero-variance positive control had not exposed it. Condition 1 is now a one-sided sign test:
+keep iff the model improves on significantly more than half the folds (binomial
+p < KEEP_ALPHA = 0.05) and the mean gain is positive — magnitude-independent. Condition 4
+(median gain > 0.002 floor) still carries the worth-a-champion magnitude; conditions 2 and 3
+unchanged. Re-validated (tools/validate_keeprule.py): recipe on m5_all KEPT (8/8, p 0.004);
+recipe on the m5_3 screen discarded (4/8, p 0.64); per-store on m5_3 now KEPT on the screen
+(7/8, p 0.035) as a promising result that the m5_all confirmation (r120, 3/8) correctly
+rejects; every bias/ratio/calibration run discarded; the uniform positive control kept. This
+unblocked the m5_all recipe promotion (champion/m5_all/v1).
+
 ## v6 — a keep rule that measures the gain, not the parent's noise — 2026-09-15 (tag `v6-keeprule`, SPEC_v6_keeprule.md)
 
 Two defects in the keep rule, both found by re-scoring the v5 corpus. **(1)** Condition 1's

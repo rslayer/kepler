@@ -90,12 +90,12 @@ Per branch:
   than the single-seed spread is still suspect). Add BAG=off to the rerun to obtain
   single-seed numbers directly comparable with v1-v4 rows.
 
-  Since harness v6 the keep rule's condition 1 tests the mean paired per-fold gain against
-  its OWN standard error (2 SE) plus a 0.002 floor, and a new condition 4 requires the
-  MEDIAN per-fold gain to be positive — so a model that wins one extreme fold and loses the
-  rest is rejected by the harness itself. Your item-7 check (rerun with unseen seeds, FAIL
-  if the gain is under the seed spread) is unchanged and still independent; the single-seed
-  spread columns still feed it.
+  Since harness v6.1 the keep rule's condition 1 is a one-sided SIGN TEST (the model must
+  improve on significantly more than half the folds, binomial p < 0.05), and condition 4
+  requires the MEDIAN per-fold gain to be positive above a floor — so a model that wins one
+  extreme fold and loses the rest is rejected by the harness itself. Your item-7 check
+  (rerun with unseen seeds, FAIL if the gain is under the seed spread) is unchanged and
+  still independent; the single-seed spread columns still feed it.
 - Item 8 (determinism): same recipe with the default seeds (omit SEEDS=). Means and spreads
   must match the logged row to six decimals.
 - m5_all branches (confirmation tier, ~45 min per three-seed backtest): for item 7 rerun

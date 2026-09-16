@@ -82,13 +82,14 @@ Harness notes (how the rules above map onto this repo):
   keep rule (paired gain, no fold regresses, bias guardrail) and writes
   verdict=kept|discarded to runs/runs.csv and runs/detail/<run_id>.json. Always use a
   bagged parent for a bagged child (the harness records both flags in keep_rule).
-  Since harness v6 the keep rule has four conditions, all required: (1) the mean paired
-  per-fold gain exceeds 2 standard errors of that gain AND a 0.002 floor — this replaced
-  "2 x the noisier run's single-seed spread", which compared a bagged headline against a
-  single-seed spread and used the wrong operand's noise; (2) no fold regresses beyond its
-  own spread; (3) bias guardrail; (4) the MEDIAN per-fold gain is positive and above the
-  floor, so a win that rides on a single fold (e.g. Christmas) is rejected. The single-seed
-  <metric>_spread columns are unchanged (the adversary's item-7 input).
+  Since harness v6 the keep rule has four conditions, all required: (1) a one-sided SIGN
+  TEST on the per-fold gains — the model must improve on significantly more than half the
+  folds (binomial p < 0.05), magnitude-independent so a run better on every fold is not
+  penalised for one large fold (v6.1; v6.0 used mean-vs-SE and wrongly rejected the recipe's
+  8/8 win on m5_all); (2) no fold regresses beyond its own spread; (3) bias guardrail;
+  (4) the MEDIAN per-fold gain is positive and above a 0.002 floor, so a win that rides on a
+  single fold (e.g. Christmas) is rejected. The single-seed <metric>_spread columns are
+  unchanged (the adversary's item-7 input).
 - Register a new model by adding a class to src/model.py and an entry in MODELS.
   Registered on main: seasonal_naive, lgbm_baseline (r033, WRMSSE 0.810828), lgbm_xmas0
   (r037, champion v1), lgbm_xmas0_tgd (champion since 2026-09-14, champion/m5_ca1/v2, r060,

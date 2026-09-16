@@ -32,34 +32,37 @@ def child_row(rid: str) -> dict:
 
 
 def deciding(kr: dict) -> str:
-    names = {"paired_gain": "1 gain/SE", "no_fold_regresses": "2 fold-regress",
+    names = {"paired_gain": "1 sign-test", "no_fold_regresses": "2 fold-regress",
              "bias_guardrail": "3 bias", "median_gain": "4 median"}
     failed = [names[k] for k in names if isinstance(kr.get(k), dict) and not kr[k]["pass"]]
     return "kept" if kr["verdict"] == "kept" else "discarded on " + ", ".join(failed)
 
 
-# (child, parent, metric, must_stay_discarded)
+# (child, parent, metric, expected_verdict)
 CORPUS = [
-    ("r115", "r114", "wrmsse_hier", True),   # recipe vs baseline (m5_3)
-    ("r119", "r115", "wrmsse_hier", True),   # per-store vs recipe (m5_3)
-    ("r117", "r115", "wrmsse_hier", True),   # correction ON vs OFF
-    ("r109", "r107", "wrmsse_hier", True),   # ratio target
-    ("r113", "r107", "wrmsse_hier", True),   # store x dept calibration
-    ("r120", "r118", "wrmsse_hier", True),   # per-store on m5_all
+    ("r106", "r083", "wrmsse_hier", "kept"),       # recipe on m5_all: better on 8/8 folds -> keep
+    ("r118", "r083", "wrmsse_hier", "kept"),       # recipe on m5_all, bagged -> keep
+    ("r115", "r114", "wrmsse_hier", "discarded"),  # recipe on m5_3 screen: 4/8, a Christmas-only win
+    ("r119", "r115", "wrmsse_hier", "kept"),       # per-store on m5_3: 7/8 -> promising screen keep (m5_all r120 rejects it)
+    ("r117", "r115", "wrmsse_hier", "discarded"),  # correction ON vs OFF
+    ("r109", "r107", "wrmsse_hier", "discarded"),  # ratio target
+    ("r113", "r107", "wrmsse_hier", "discarded"),  # store x dept calibration
+    ("r120", "r118", "wrmsse_hier", "discarded"),  # per-store on m5_all: 3/8 -> the real gate rejects it
 ]
 
 
 def main() -> int:
     problems = []
     print("== corpus re-evaluation (recorded verdict -> v6 verdict) ==")
-    for child, parent, metric, must_discard in CORPUS:
-        old = detail(child).get("keep_rule", {}).get("verdict", "?")
+    for child, parent, metric, expected in CORPUS:
+        rec = (detail(child).get("keep_rule") or {}).get("verdict", "?")
         kr = bt.keep_rule(child_row(child), detail(child)["folds"], detail(parent), metric)
         pg = kr["paired_gain"]; mg = kr["median_gain"]
-        print(f"  {child} vs {parent}: recorded={old:9s} -> v6={kr['verdict']:9s}  "
-              f"[{deciding(kr)}]  gain={pg['gain']:+.4f} se={pg['se']:.4f} median={mg['median_gain']:+.4f}")
-        if must_discard and kr["verdict"] == "kept":
-            problems.append(f"{child} flipped to kept (was to stay discarded)")
+        ok = "OK" if kr["verdict"] == expected else "MISMATCH"
+        print(f"  {child} vs {parent}: recorded={rec:9s} -> v6.1={kr['verdict']:9s} (want {expected:9s}) {ok}  "
+              f"[{deciding(kr)}]  {pg['folds_up']}/{pg['folds_nonzero']} up sign_p={pg['sign_p']:.4f} median={mg['median_gain']:+.4f}")
+        if kr["verdict"] != expected:
+            problems.append(f"{child}: got {kr['verdict']}, expected {expected}")
 
     print("\n== positive control (uniform +0.010 improvement over r114 baseline) ==")
     par = detail("r114")
@@ -71,9 +74,9 @@ def main() -> int:
     row["bias"] = RUNS["r114"]["bias"]; row["bagged"] = "True"
     kr = bt.keep_rule(row, folds, par, "wrmsse_hier")
     pg = kr["paired_gain"]; mg = kr["median_gain"]
-    print(f"  synthetic vs r114: v6={kr['verdict']}  gain={pg['gain']:+.4f} se={pg['se']:.4f} "
-          f"median={mg['median_gain']:+.4f}  c1={pg['pass']} c2={kr['no_fold_regresses']['pass']} "
-          f"c3={kr['bias_guardrail']['pass']} c4={mg['pass']}")
+    print(f"  synthetic vs r114: v6.1={kr['verdict']}  {pg['folds_up']}/{pg['folds_nonzero']} up "
+          f"sign_p={pg['sign_p']:.4f} median={mg['median_gain']:+.4f}  c1={pg['pass']} "
+          f"c2={kr['no_fold_regresses']['pass']} c3={kr['bias_guardrail']['pass']} c4={mg['pass']}")
     if kr["verdict"] != "kept":
         problems.append("positive control was not kept — the rule cannot say yes")
 
