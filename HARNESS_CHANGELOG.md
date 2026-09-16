@@ -69,6 +69,30 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v7 field notes — reconciliation, and the screen is an unreliable proxy — 2026-09-16
+
+SPEC_v7 built middle-out multiplicative reconciliation (src/reconcile.py, recipe6_reconciled):
+forecast a smooth aggregate level (store-category) with a light LGBM and scale the recipe's
+item-store forecasts so their group sums match, gating the Christmas window + aftermath and
+clipping [0.7,1.5]. On the m5_3 screen it is KEPT (r124: hier 0.615 vs 0.649; every aggregate
+level L1-L9 better by 0.034-0.059; item levels untouched; the mechanism is textbook). On
+m5_all it is DISCARDED (r125: hier 0.723 vs 0.695; EVERY level worse; folds 5-7 blow up). The
+reason: on 3 stores the bottom-up aggregates are noisy so the aggregate model adds value; on
+30,490 series the recipe's bottom-up aggregates are already excellent, so the light aggregate
+model is worse than bottom-up and reconciling toward it hurts. Reconciliation this way does
+not close the leaderboard gap.
+
+**The important finding is about the harness, not the model.** The m5_3 screen disagrees with
+m5_all in BOTH directions: the recipe screens as discarded but wins m5_all (screen too
+strict, v5/v6); reconciliation screens as kept but loses m5_all (screen too lenient, here).
+The 3-store screen changes the metric's noise structure vs the full data, so a kept-on-screen
+verdict is not evidence of an m5_all win, and vice versa. The two-tier screen->confirm design
+(tiers.json, CLAUDE.md step 7a) cannot be trusted as a cheap proxy for model changes that
+interact with aggregation. A screen that matches m5_all's noise structure (more stores, or a
+stratified sample) is needed before the screen can gate anything. Until then, m5_all is the
+only reliable gate. recipe6_reconciled stays registered as a documented discarded experiment;
+v7 is a negative result — not tagged, FROZEN_REF unchanged.
+
 ## v6.1 — condition 1 is a sign test, not mean-vs-SE — 2026-09-15 (tag `v6-keeprule-1`)
 
 v6.0's condition 1 (mean paired gain > 2 x its standard error) had a false negative: a run
