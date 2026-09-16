@@ -22,16 +22,17 @@ beats every published benchmark and sits between rank 50 and the statistical bas
 the remaining gap to the top is bias on calm months at the aggregate levels, not item-level
 error.
 
-**Does the gate pass on m5_3?** No. With seed-averaged forecasts (Part A) the recipe's
-gain over the baseline on the screen is 0.0219 against a bar of 0.0222 (2 x the recipe's
-single-seed spread, unchanged by bagging), and it regresses on the four calm late-winter
-folds by 0.02–0.06 — a real, repeatable loss (r104, r107, r108, r115), not noise. Bagging
-moved the headline by 0.003. Four bias levers (ratio target, momentum features, weighted
-ratio target, store x department calibration: r109–r113) and the Part B per-series
-correction (r117) all made it worse; per-store models (Part C) won on the 3-store screen
-(0.638 vs 0.649, r119, discarded on the parent's noise bar) and lost on all 10 stores
-(0.703 vs 0.695, r120). The keep rule was not loosened. The m5_all recipe remains a kept
-run that the screen cannot certify; promotion to champion/m5_all is a human decision.
+**Does the gate pass on m5_3? No — and v6 confirmed that is correct.** With seed-averaged
+forecasts (v5 Part A) the recipe's mean gain over the baseline is +0.022, but that is one
+Christmas fold (+0.29) outvoting seven calm-month losses. The v6 keep rule replaced condition
+1's flawed bar (it compared a bagged headline against a single-seed spread, and used the
+noisier operand's noise) with a paired-gain-vs-its-own-SE test plus a floor, and added a
+median-per-fold-gain guard. Under the corrected rule every recipe variant tried (r109, r113,
+r115, r117) and per-store models (r119 screen, r120 m5_all) stay discarded, each for a named
+reason; a constructed uniform improvement is kept, so the gate can say yes. The recipe
+remains a kept run on m5_all (0.698 backtest, 0.626 yardstick, ahead of every published
+benchmark) that the screen cannot certify because it is not better on the typical fold. The
+next lever is a model that does not trade holidays for calm months, not a gate change.
 
 **Throughput (Part D, m5_all baseline, Apple M4 Max 14-core / 36 GB, on a corporate laptop with continuous background load — not a clean idle box; see tools/cloud/BENCHMARK.md).** One backtest (24 fits): 44.7 min serial, **28.3 min at JOBS=3** (the sweet spot, JOBS = floor(cores/4)), 53.3 min oversubscribed at JOBS=7. Best speedup 1.58x, capped by 4-thread fits and single-threaded 12-level scoring. ~2 m5_all runs/hour per machine; results identical across worker counts to six decimals. Agent cost $0.70/run (sessions.csv); a 200-run m5_all cycle is ~94 h / ~$140 on the laptop, ~50 h / ~$216 on a cloud spot box.
 
