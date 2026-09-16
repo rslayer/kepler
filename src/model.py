@@ -388,6 +388,28 @@ class LGBMXmasThanksgivingDept(LGBMChristmasZero):
         return super().postprocess(predict, preds) * self._mult
 
 
+class LGBMRecipeReconciled(LGBMRecipe6CalendarL2):
+    """Middle-out multiplicative reconciliation (SPEC_v7): forecast a smooth aggregate level
+    independently and scale the recipe's item-store forecasts within each group so their sum
+    matches it. Borrows the aggregate's level to correct the bottom model's aggregate bias.
+    Run with bag_seeds on (the harness averages the reconciled forecast across seeds), same as
+    the recipe. See src/reconcile.py."""
+
+    name = "recipe6_reconciled"
+    RECON_LEVEL = ["store_id", "dept_id"]   # M5 level 9 (store-department): few, smooth series
+    RECON_CLIP = (0.5, 2.0)
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "reconcile_level": list(self.RECON_LEVEL),
+                "reconcile_clip": list(self.RECON_CLIP)}
+
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        from . import reconcile as rec
+        bottom = super().forecast(panel, origin, horizon, seed)
+        agg = rec.aggregate_forecast(panel, self.RECON_LEVEL, origin, horizon, seed)
+        return rec.reconcile(bottom, agg, panel, self.RECON_LEVEL, tuple(self.RECON_CLIP))
+
+
 class LGBMRecipe6CalendarL2Slow(LGBMRecipe6CalendarL2):
     """Research lever (close the leaderboard gap): restore the spec learning schedule — a
     slower learning rate (0.02) with a higher tree cap (3000), early-stopped — from the
@@ -571,6 +593,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
+    LGBMRecipeReconciled.name: LGBMRecipeReconciled,
     LGBMRecipe6PerStore.name: LGBMRecipe6PerStore,
     LGBMRecipe6PerStoreCorr.name: LGBMRecipe6PerStoreCorr,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
