@@ -388,6 +388,33 @@ class LGBMXmasThanksgivingDept(LGBMChristmasZero):
         return super().postprocess(predict, preds) * self._mult
 
 
+class LGBMRecipe6CalendarL2Tweedie(LGBMRecipe6CalendarL2):
+    """The full recipe under a Tweedie objective (variance power 1.1) instead of L2 regression.
+    Tweedie handles the many zero-sales days differently; used as an ensemble member."""
+
+    name = "recipe6_l2_tweedie"
+    PARAMS = {**LGBMRecipe6CalendarL2.PARAMS, "objective": "tweedie", "tweedie_variance_power": 1.1}
+
+
+class LGBMRecipeEnsembleObj(LGBMRecipe6CalendarL2):
+    """Ensemble across objectives: the mean of the recipe under regression (recipe6_calendar_l2)
+    and under Tweedie (recipe6_l2_tweedie). Diverse error structures cancel on averaging;
+    aggregation-neutral (averages the bottom forecasts, so every level benefits from the
+    variance reduction). Run with bag_seeds on (the harness averages across seeds too). 2x fit."""
+
+    name = "recipe_ens_obj"
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "ensemble": ["recipe6_calendar_l2", "recipe6_l2_tweedie"]}
+
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        reg = super().forecast(panel, origin, horizon, seed)
+        tw = LGBMRecipe6CalendarL2Tweedie().forecast(panel, origin, horizon, seed)
+        m = reg.merge(tw, on=["id", "date"], suffixes=("_r", "_t"))
+        m["forecast"] = 0.5 * (m["forecast_r"] + m["forecast_t"])
+        return m[["id", "date", "forecast"]]
+
+
 class LGBMRecipeReconciled(LGBMRecipe6CalendarL2):
     """Middle-out multiplicative reconciliation (SPEC_v7): forecast a smooth aggregate level
     independently and scale the recipe's item-store forecasts within each group so their sum
@@ -597,6 +624,8 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
     LGBMRecipeReconciled.name: LGBMRecipeReconciled,
+    LGBMRecipe6CalendarL2Tweedie.name: LGBMRecipe6CalendarL2Tweedie,
+    LGBMRecipeEnsembleObj.name: LGBMRecipeEnsembleObj,
     LGBMRecipe6PerStore.name: LGBMRecipe6PerStore,
     LGBMRecipe6PerStoreCorr.name: LGBMRecipe6PerStoreCorr,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
