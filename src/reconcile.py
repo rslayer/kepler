@@ -115,18 +115,20 @@ def reconcile(bottom_pred: pd.DataFrame, agg_pred: pd.DataFrame, panel: Panel, k
     return out[["id", "date", "forecast"]]
 
 
-def window_has_major_event(panel: Panel, origin: pd.Timestamp, horizon: int) -> bool:
-    """True if the forecast window contains a major, rare event (the christmas flag) the light
-    aggregate model cannot forecast. Reconciliation is skipped for such windows: the aggregate
-    model is broadly wrong across the whole holiday period, not only on the flagged day, and
-    per-day gating does not recover it (SPEC_v7 field note)."""
+def window_has_major_event(panel: Panel, origin: pd.Timestamp, horizon: int, lookback: int = 14) -> bool:
+    """True if a major, rare event (the christmas flag) falls anywhere in [origin-lookback,
+    origin+horizon]. Reconciliation is skipped for such windows: the light aggregate model is
+    broadly wrong across the whole holiday period AND its recovery (the fold whose origin sits
+    ~10 days after Christmas over-forecasts the January level and, unclipped, blows up +0.34).
+    Per-day gating and tighter clips do not recover it; only skipping the window does. The
+    lookback covers the aftermath (r123 field note: fold 2, origin 04 Jan, needed gating)."""
     cal = panel.calendar
     if "christmas" not in cal.columns:
         return False
     o = panel.pos(origin)
     dates = panel.dates
-    for h in range(1, horizon + 1):
+    for h in range(-lookback, horizon + 1):
         t = o + h
-        if t < len(dates) and float(cal["christmas"].get(dates[t], 0.0)) > 0:
+        if 0 <= t < len(dates) and float(cal["christmas"].get(dates[t], 0.0)) > 0:
             return True
     return False

@@ -397,8 +397,8 @@ class LGBMRecipeReconciled(LGBMRecipe6CalendarL2):
 
     name = "recipe6_reconciled"
     RECON_LEVEL = ["store_id", "cat_id"]    # M5 level 8 (store-category): smooth, and the probe's best calm-fold level
-    RECON_CLIP = (0.5, 2.0)
-    GATE_MAJOR_EVENT = True                  # skip reconciliation for windows containing the christmas spike
+    RECON_CLIP = (0.7, 1.5)                   # cap per-group scaling; folds 3-8 gains come from small bias corrections
+    GATE_MAJOR_EVENT = True                  # skip reconciliation for the whole holiday window + aftermath (see reconcile.py)
 
     def extra_config(self) -> dict:
         return {**super().extra_config(), "reconcile_level": list(self.RECON_LEVEL),
