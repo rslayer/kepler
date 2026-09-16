@@ -102,32 +102,27 @@ the current corpus; both make it correct.
 
 ---
 
-## Part B — A regime-aware keep decision
+## Part B — A robust median-gain guard
+
+### Finding that redirected this part
+The regime split first drafted here (group folds by forward-window event density) was tested
+against the data and does not hold: event density does not separate the recipe's win-folds
+from its loss-folds. The recipe's advantage is essentially one fold (Christmas, +0.29); the
+Feb-Mar losses are a seasonal-level effect with no clean calendar covariate. So Part B is a
+robust central-tendency guard instead of a regime split (human decision, 2026-09-15).
 
 ### Tasks
-- The keep rule gains one condition, evaluated per seasonal regime, role-driven (no M5
-  hardcoding). For each fold, compute `event_density` = the fraction of the fold's 28
-  forward days flagged as a major event/holiday, read from the contract's calendar flags
-  (`roles["calendar_flags"]` / `exog_date`; use the flags already used by the recipe, e.g.
-  the event and Christmas flags). Split the folds into two regimes at a configurable cut
-  (`REGIME_CUT`, default: folds with `event_density` above the run's median vs the rest;
-  if all folds are equal, there is one regime and this condition reduces to condition 1).
-- New condition 4 (regime consistency): within each regime, the paired gain must not be
-  negative beyond that regime's own paired SE. A model that wins one regime and loses
-  another fails. This is the mechanical statement of "do not accept a trade as a win."
-- Condition 2 (no single fold regresses beyond its own fold spread) stays. Condition 3
-  (bias guardrail) stays. `verdict = kept` iff conditions 1, 2, 3, 4 all pass.
-- Report and store per-regime: fold membership, mean gain, SE, pass/fail. Print a two-line
-  regime summary.
+- Add condition 4 to `keep_rule`: the MEDIAN per-fold gain must be positive and above the
+  FLOOR (`median(gain_f) > 0 and > KEEP_FLOOR`). The mean (condition 1) is dominated by one
+  extreme fold; the median asks "is this model better on the TYPICAL fold?" and rejects a
+  win that rides on a single fold. Robust, role-free, no calendar covariate.
+- `verdict = kept` iff conditions 1, 2, 3, 4 all pass. Record `median_gain` in the detail
+  JSON and print a condition-4 line.
 
 ### Acceptance
-- On the recipe-vs-baseline `m5_3` comparison, condition 4 FAILS on the calm regime
-  (the recipe loses folds 5–8) even though the holiday regime passes — i.e. the trade is
-  named. Report the two regimes' gains.
-- The regime split is computed from calendar flags, not fold indices; show the split it
-  produced and the `event_density` per fold.
-
----
+- Recipe vs baseline on `m5_3`: condition 4 FAILS (median per-fold gain negative), naming the
+  "one-fold win" directly. Report the median.
+- A uniform improvement (the Part C positive control) passes condition 4.
 
 ## Part C — Validate on the frozen corpus and a positive control
 

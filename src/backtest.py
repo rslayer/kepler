@@ -205,10 +205,17 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
              "parent_abs_bias": abs(p_agg["bias"]), "child_abs_bias": abs(c_bias),
              "guardrail": BIAS_GUARDRAIL}
 
-    verdict = "kept" if (cond1["pass"] and cond2["pass"] and cond3["pass"]) else "discarded"
+    # Condition 4 (v6): the MEDIAN per-fold gain must be positive and above the floor. The mean
+    # (condition 1) is dominated by one extreme fold; e.g. the M5 recipe's holiday fold (+0.29)
+    # outvotes seven calm losses. The median asks "is this model better on the TYPICAL fold?" and
+    # rejects a win that rides on a single fold. Robust, role-free, no calendar covariate.
+    med = float(np.median(gain_f))
+    cond4 = {"pass": bool(med > 0 and med > KEEP_FLOOR), "median_gain": med, "floor": KEEP_FLOOR}
+
+    verdict = "kept" if (cond1["pass"] and cond2["pass"] and cond3["pass"] and cond4["pass"]) else "discarded"
     return {"parent": parent["run_id"], "verdict": verdict, "metric": metric,
             "parent_bagged": bool(parent.get("bagged", False)), "child_bagged": bool(child_row.get("bagged") in (True, "True")),
-            "paired_gain": cond1, "no_fold_regresses": cond2, "bias_guardrail": cond3}
+            "paired_gain": cond1, "no_fold_regresses": cond2, "bias_guardrail": cond3, "median_gain": cond4}
 
 
 def print_keep_rule(kr: dict) -> None:
@@ -222,6 +229,10 @@ def print_keep_rule(kr: dict) -> None:
           f"worst fold {worst['fold']} delta={worst['delta']:+.6f} tol={worst['tolerance']:.6f}")
     print(f"  3 bias guardrail   {'PASS' if c3['pass'] else 'FAIL'}  "
           f"|bias| child={c3['child_abs_bias']:.4f} parent={c3['parent_abs_bias']:.4f} +{c3['guardrail']}")
+    c4 = kr.get("median_gain")
+    if c4:
+        print(f"  4 median gain      {'PASS' if c4['pass'] else 'FAIL'}  "
+              f"median_fold_gain={c4['median_gain']:+.6f} floor={c4['floor']}")
     print(f"  verdict={kr['verdict']}")
 
 
