@@ -71,11 +71,11 @@ score-holdout:
 
 # Frozen baseline: the ref whose frozen-file contents are authoritative. Move it
 # (re-tag) whenever the human legitimately changes a frozen file, e.g.
-#   git tag -f v6-keeprule <commit-with-the-new-frozen-state>
+#   git tag -f v6-keeprule-1 <commit-with-the-new-frozen-state>
 # v5-parta (2026-09-14) supersedes the stale v4-partc: score_holdout.py's wrmsse_hier
 # yardstick column, the evaluation-label quarantine in adapters/m5.py, and backtest.py's
 # --reparent path, per-dataset budgets and v5 seed bagging are all in the baseline now.
-FROZEN_REF ?= v6-keeprule
+FROZEN_REF ?= v6-keeprule-1
 
 # Every file whose contents the harness's integrity depends on. This must include not
 # just the scorer but everything that FEEDS it: the fold logic + keep rule (backtest),

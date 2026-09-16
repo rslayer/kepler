@@ -137,10 +137,13 @@ def append_run(row: dict) -> None:
 
 # ---------------------------------------------------------------------------- keep rule
 BIAS_GUARDRAIL = 0.02
-# v6: condition 1 tests the paired per-fold gain against its OWN uncertainty, not 2x the
-# noisier run's single-seed spread. Z sigmas above zero, with a minimum worth-a-champion floor.
-KEEP_Z = 2.0
-KEEP_FLOOR = 0.002  # minimum mean paired gain on wrmsse / wrmsse_hier to matter at all
+# v6.1: condition 1 is a one-sided sign test on the per-fold gains (is the model better on
+# significantly more than half the folds?), magnitude-independent so a run that is better on
+# every fold is not penalised for being much better on one. Condition 4 (median gain) carries
+# the worth-a-champion magnitude. (v6.0 used mean-vs-SE, which rejected a uniform 8/8 win when
+# one fold's gain was large enough to inflate the SE -- e.g. the recipe on m5_all.)
+KEEP_ALPHA = 0.05   # sign-test significance for condition 1
+KEEP_FLOOR = 0.002  # minimum MEDIAN paired gain (condition 4) to matter at all
 
 
 def load_parent(run_id: str) -> dict:
@@ -180,17 +183,18 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
     if [f["origin"] for f in p_folds] != [f["origin"] for f in child_folds]:
         raise SystemExit("parent and child fold origins differ; runs are not comparable")
 
-    # Condition 1 (v6): the paired per-fold gain (parent - child, positive = child better) tested
-    # against its own standard error, not 2x the noisier run's single-seed spread. n_eff discounts
-    # the fold-window overlap (14-day spacing, 28-day horizon -> each window ~half-independent).
+    # Condition 1 (v6.1): one-sided sign test on the paired per-fold gains (parent - child,
+    # positive = child better). Keep iff the model improves significantly more than half the
+    # folds. Magnitude-independent: a run better on every fold passes regardless of how large
+    # any single fold's gain is. Ties (exact 0) are dropped, as in a standard sign test.
     gain_f = [float(pf[metric]) - float(cf[metric]) for pf, cf in zip(p_folds, child_folds)]
     gain = float(np.mean(gain_f))
-    n_eff = max(1, math.ceil(len(gain_f) * FOLD_SPACING / HORIZON))
-    sd = float(np.std(gain_f, ddof=1)) if len(gain_f) > 1 else 0.0
-    se = sd / math.sqrt(n_eff)
-    cond1 = {"pass": bool(gain > 0 and gain > KEEP_Z * se and gain > KEEP_FLOOR),
-             "gain": gain, "se": se, "n_eff": n_eff, "z": KEEP_Z, "floor": KEEP_FLOOR,
-             "threshold": max(KEEP_Z * se, KEEP_FLOOR), "gain_f": gain_f,
+    nz = [g for g in gain_f if g != 0.0]
+    n = len(nz); n_up = sum(1 for g in nz if g > 0)
+    sign_p = (sum(math.comb(n, i) for i in range(n_up, n + 1)) / 2 ** n) if n else 1.0
+    cond1 = {"pass": bool(n > 0 and sign_p < KEEP_ALPHA and gain > 0),
+             "sign_p": sign_p, "alpha": KEEP_ALPHA, "folds_up": n_up, "folds_nonzero": n,
+             "gain": gain, "gain_f": gain_f,
              "parent_mean": float(p_agg[metric]), "child_mean": float(child_row[metric])}
     per_fold = []
     for pf, cf in zip(p_folds, child_folds):
@@ -221,8 +225,9 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
 def print_keep_rule(kr: dict) -> None:
     c1, c2, c3 = kr["paired_gain"], kr["no_fold_regresses"], kr["bias_guardrail"]
     print(f"\nkeep rule vs parent {kr['parent']} on {kr.get('metric', 'wrmsse')}:")
-    print(f"  1 paired gain      {'PASS' if c1['pass'] else 'FAIL'}  gain={c1['gain']:+.6f} "
-          f"threshold={c1['threshold']:.6f} ({c1['z']} x SE {c1['se']:.6f} over n_eff={c1['n_eff']}, floor {c1['floor']})")
+    print(f"  1 sign test        {'PASS' if c1['pass'] else 'FAIL'}  "
+          f"{c1['folds_up']}/{c1['folds_nonzero']} folds improve, sign_p={c1['sign_p']:.4f} "
+          f"(alpha {c1['alpha']}), mean gain={c1['gain']:+.6f}")
     worst = max(c2["folds"], key=lambda f: f["delta"] - f["tolerance"])
     print(f"  2 no fold regress  {'PASS' if c2['pass'] else 'FAIL'}  "
           f"{sum(f['pass'] for f in c2['folds'])}/{len(c2['folds'])} folds within tolerance; "
