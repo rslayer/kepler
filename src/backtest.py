@@ -20,6 +20,7 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -136,6 +137,10 @@ def append_run(row: dict) -> None:
 
 # ---------------------------------------------------------------------------- keep rule
 BIAS_GUARDRAIL = 0.02
+# v6: condition 1 tests the paired per-fold gain against its OWN uncertainty, not 2x the
+# noisier run's single-seed spread. Z sigmas above zero, with a minimum worth-a-champion floor.
+KEEP_Z = 2.0
+KEEP_FLOOR = 0.002  # minimum mean paired gain on wrmsse / wrmsse_hier to matter at all
 
 
 def load_parent(run_id: str) -> dict:
@@ -169,20 +174,24 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
     else:
         p_agg = {k: float(np.mean([parent["seeds"][s]["aggregate"][k] for s in parent["seeds"]]))
                  for k in (metric, "bias")}
-    p_vals = [parent["seeds"][s]["aggregate"][metric] for s in parent["seeds"]]  # spread: pre-bagging, always
-    p_spread = float(max(p_vals) - min(p_vals))
-    c_mean, c_spread, c_bias = (float(child_row[metric]), float(child_row[f"{metric}_spread"]),
-                                float(child_row["bias"]))
-
-    tol = 2 * max(p_spread, c_spread)
-    gain = p_agg[metric] - c_mean
-    cond1 = {"pass": bool(gain > tol), "gain": gain, "threshold": tol,
-             "parent_mean": p_agg[metric], "child_mean": c_mean,
-             "parent_spread": p_spread, "child_spread": c_spread}
+    c_bias = float(child_row["bias"])
 
     p_folds = parent["folds"]
     if [f["origin"] for f in p_folds] != [f["origin"] for f in child_folds]:
         raise SystemExit("parent and child fold origins differ; runs are not comparable")
+
+    # Condition 1 (v6): the paired per-fold gain (parent - child, positive = child better) tested
+    # against its own standard error, not 2x the noisier run's single-seed spread. n_eff discounts
+    # the fold-window overlap (14-day spacing, 28-day horizon -> each window ~half-independent).
+    gain_f = [float(pf[metric]) - float(cf[metric]) for pf, cf in zip(p_folds, child_folds)]
+    gain = float(np.mean(gain_f))
+    n_eff = max(1, math.ceil(len(gain_f) * FOLD_SPACING / HORIZON))
+    sd = float(np.std(gain_f, ddof=1)) if len(gain_f) > 1 else 0.0
+    se = sd / math.sqrt(n_eff)
+    cond1 = {"pass": bool(gain > 0 and gain > KEEP_Z * se and gain > KEEP_FLOOR),
+             "gain": gain, "se": se, "n_eff": n_eff, "z": KEEP_Z, "floor": KEEP_FLOOR,
+             "threshold": max(KEEP_Z * se, KEEP_FLOOR), "gain_f": gain_f,
+             "parent_mean": float(p_agg[metric]), "child_mean": float(child_row[metric])}
     per_fold = []
     for pf, cf in zip(p_folds, child_folds):
         ftol = max(pf[f"{metric}_spread"], cf[f"{metric}_spread"])
@@ -206,7 +215,7 @@ def print_keep_rule(kr: dict) -> None:
     c1, c2, c3 = kr["paired_gain"], kr["no_fold_regresses"], kr["bias_guardrail"]
     print(f"\nkeep rule vs parent {kr['parent']} on {kr.get('metric', 'wrmsse')}:")
     print(f"  1 paired gain      {'PASS' if c1['pass'] else 'FAIL'}  gain={c1['gain']:+.6f} "
-          f"threshold={c1['threshold']:.6f} (2 x max spread)")
+          f"threshold={c1['threshold']:.6f} ({c1['z']} x SE {c1['se']:.6f} over n_eff={c1['n_eff']}, floor {c1['floor']})")
     worst = max(c2["folds"], key=lambda f: f["delta"] - f["tolerance"])
     print(f"  2 no fold regress  {'PASS' if c2['pass'] else 'FAIL'}  "
           f"{sum(f['pass'] for f in c2['folds'])}/{len(c2['folds'])} folds within tolerance; "
