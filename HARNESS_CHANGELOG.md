@@ -69,6 +69,45 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v6 — a keep rule that measures the gain, not the parent's noise — 2026-09-15 (tag `v6-keeprule`, SPEC_v6_keeprule.md)
+
+Two defects in the keep rule, both found by re-scoring the v5 corpus. **(1)** Condition 1's
+bar was `2 x max(parent, child single-seed spread)` — it compared a v5 *bagged* headline
+against *single-seed* spreads, and used the noise of the noisier operand rather than the
+noise of the difference, so a low-noise child was judged against its noisy parent (per-store
+r119, spread 0.0011, was denied by a 0.0222 bar that was all parent noise). **(2)** The real
+one: a single mean over eight seasonal folds hid regime trades — the recipe's +0.022 mean vs
+baseline is a +0.29 Christmas fold outvoting seven calm-month losses.
+
+**Fix.** Condition 1 now tests the mean paired per-fold gain against its own standard error
+(`gain > 2 x SE`, SE over `n_eff = ceil(folds x spacing / horizon) = 4` for the overlapping
+8/14/28 screen) plus a 0.002 worth-a-champion floor. New condition 4: the MEDIAN per-fold
+gain must be positive and above the floor — a win riding on one fold fails. Conditions 2
+(no fold regresses) and 3 (bias guardrail) unchanged; all four required for `kept`. The
+single-seed `<metric>_spread` columns are untouched (the adversary's item-7 input). The
+detail JSON records `gain`, `se`, `n_eff`, `z`, `floor`, `gain_f`, and `median_gain`. The
+event-density regime split first drafted for Part B was dropped: tested against the data,
+event density does not separate the recipe's win-folds from its loss-folds (the split is
+seasonal-level, not event-driven), so a robust median guard replaced it (human decision).
+
+**Validation (tools/validate_keeprule.py, read-only re-evaluation of the v5 corpus).**
+
+| child vs parent | recorded | v6 | decided by |
+|---|---|---|---|
+| r115 recipe vs baseline r114 | discarded | discarded | 1 (SE), 2, 4 (median −0.010) |
+| r119 per-store vs recipe r115 | discarded | discarded | 1 (SE; fold-2 regression) |
+| r117 correction-ON vs r115 | discarded | discarded | 1, 2, 3, 4 |
+| r109 ratio-target vs r107 | discarded | discarded | 1, 2, 3, 4 |
+| r113 calibration vs r107 | discarded | discarded | 1, 2, 4 |
+| r120 per-store on m5_all vs r118 | discarded | discarded | 1, 2, 4 |
+| synthetic uniform +0.010 vs r114 | — | **kept** | all four pass |
+
+Every known-bad stays discarded; a constructed uniform improvement is kept — the gate can
+still say yes. **Takeaway:** the screen was telling the truth. No recipe variant is better
+on the typical fold; they trade holidays for calm months. A champion needs a model that
+wins in both regimes, which is a research problem, not a gate problem. Part A acceptance:
+r121 (baseline vs itself) discards, gain 0.000 below the floor.
+
 ## v5 Parts D & E — parallel benchmark + audit — 2026-09-15 (tag `v5-certifiable`)
 
 **Part D.** m5_all baseline timed at JOBS 1/3/4/7 on this laptop (Apple M4 Max, 14 cores):
