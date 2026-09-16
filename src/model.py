@@ -388,6 +388,18 @@ class LGBMXmasThanksgivingDept(LGBMChristmasZero):
         return super().postprocess(predict, preds) * self._mult
 
 
+class LGBMRecipe6CalendarL2Slow(LGBMRecipe6CalendarL2):
+    """Research lever (close the leaderboard gap): restore the spec learning schedule — a
+    slower learning rate (0.02) with a higher tree cap (3000), early-stopped — from the
+    budget schedule (0.05 / 1500) the recipe adopted for wall-clock in v4. Slower learning
+    with more rounds usually lifts LightGBM accuracy at the cost of fit time. One variable:
+    the learning schedule; every feature, the direct per-week split, the L2 objective and the
+    bagging are recipe6_calendar_l2 unchanged."""
+
+    name = "recipe6_l2_slow"
+    PARAMS = {**LGBMRecipe6CalendarL2.PARAMS, "learning_rate": 0.02, "n_estimators": 3000}
+
+
 class LGBMRecipe6CalendarL2Corr(LGBMRecipe6CalendarL2):
     """v5 Part B: the best recipe with the per-series correction ON (one variable vs
     recipe6_calendar_l2). Factor per series = 1 + 0.5 * (actual/predicted over the 28-day
@@ -558,6 +570,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
+    LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
     LGBMRecipe6PerStore.name: LGBMRecipe6PerStore,
     LGBMRecipe6PerStoreCorr.name: LGBMRecipe6PerStoreCorr,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
