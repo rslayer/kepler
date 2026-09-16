@@ -396,16 +396,19 @@ class LGBMRecipeReconciled(LGBMRecipe6CalendarL2):
     the recipe. See src/reconcile.py."""
 
     name = "recipe6_reconciled"
-    RECON_LEVEL = ["store_id", "dept_id"]   # M5 level 9 (store-department): few, smooth series
+    RECON_LEVEL = ["store_id", "cat_id"]    # M5 level 8 (store-category): smooth, and the probe's best calm-fold level
     RECON_CLIP = (0.5, 2.0)
+    GATE_MAJOR_EVENT = True                  # skip reconciliation for windows containing the christmas spike
 
     def extra_config(self) -> dict:
         return {**super().extra_config(), "reconcile_level": list(self.RECON_LEVEL),
-                "reconcile_clip": list(self.RECON_CLIP)}
+                "reconcile_clip": list(self.RECON_CLIP), "gate_major_event": self.GATE_MAJOR_EVENT}
 
     def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
         from . import reconcile as rec
         bottom = super().forecast(panel, origin, horizon, seed)
+        if self.GATE_MAJOR_EVENT and rec.window_has_major_event(panel, origin, horizon):
+            return bottom  # holiday window: the light aggregate model is unreliable, keep bottom-up
         agg = rec.aggregate_forecast(panel, self.RECON_LEVEL, origin, horizon, seed)
         return rec.reconcile(bottom, agg, panel, self.RECON_LEVEL, tuple(self.RECON_CLIP))
 
