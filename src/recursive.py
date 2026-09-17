@@ -62,6 +62,7 @@ PARAMS_TWEEDIE = {**PARAMS, "objective": "tweedie", "tweedie_variance_power": 1.
 class RecursiveForecaster:
     name = "lgbm_recursive"
     PARAMS = PARAMS
+    LOG_TARGET = False
 
     def config(self) -> dict:
         return {"kind": self.name, "lags": list(LAGS), "rolls": list(ROLLS),
@@ -99,6 +100,8 @@ class RecursiveForecaster:
         for c in cats:
             train[c] = pd.Categorical(train[c])
         y = np.concatenate(targets).astype(np.float64)
+        if self.LOG_TARGET:
+            y = np.log1p(y)
         params = dict(self.PARAMS); params.update(random_state=seed, seed=seed, bagging_seed=seed, feature_fraction_seed=seed)
         model = lgb.LGBMRegressor(**params)
         model.fit(train[feat_names], y, categorical_feature=list(cats))
@@ -117,7 +120,8 @@ class RecursiveForecaster:
             x = pd.DataFrame(fr)
             for c in cats:
                 x[c] = pd.Categorical(x[c], categories=cats[c].categories)
-            yhat = np.clip(model.predict(x[feat_names]), 0.0, None)
+            yhat = model.predict(x[feat_names])
+            yhat = np.clip(np.expm1(yhat) if self.LOG_TARGET else yhat, 0.0, None)
             vext[:, t] = yhat  # overwrite so subsequent lags/rolls use the prediction
             preds[:, h - 1] = yhat
         dates = pd.DatetimeIndex([pd.Timestamp(origin) + pd.Timedelta(days=h) for h in range(horizon)])
@@ -135,3 +139,12 @@ class RecursiveForecasterTweedie(RecursiveForecaster):
 
     name = "lgbm_recursive_tw"
     PARAMS = PARAMS_TWEEDIE
+
+
+class RecursiveForecasterLog(RecursiveForecaster):
+    """Recursive 1-step on a log1p target. log1p compresses the right-skew of intermittent
+    demand so the model's conditional mean over-predicts less; the recursive drift (the +9.6%
+    bias that persisted under both regression and Tweedie) should shrink."""
+
+    name = "lgbm_recursive_log"
+    LOG_TARGET = True
