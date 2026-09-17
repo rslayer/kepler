@@ -19,6 +19,10 @@ ADAPTERS = {
     # hierarchical screening tier: one store per state, all 12 levels, competition setup
     "m5_3": m5.M5Adapter(dataset_id="m5_3", store_id=None, dept_id=None, layout="wide", timeout_minutes=150,
                          store_ids=["CA_1", "TX_1", "WI_1"]),  # 120 min: a bagged recipe is ~90 min here
+    # v8 screen: ALL 10 stores + all states/cats (non-degenerate hierarchy, unlike m5_3) but a
+    # 1/3 item sample for speed; the trustworthy fast screen (validated to match m5_all verdicts).
+    "m5_screen": m5.M5Adapter(dataset_id="m5_screen", store_id=None, dept_id=None, layout="wide",
+                              timeout_minutes=150, item_frac=1/3, item_seed=0),
 }
 
 

@@ -69,7 +69,8 @@ def verify_manifest(directory: Path, files: tuple[str, ...]) -> None:
 
 class M5Adapter:
     def __init__(self, dataset_id: str, store_id: str | None, dept_id: str | None, layout: str = "long",
-                 timeout_minutes: int = 20, store_ids: list[str] | None = None):
+                 timeout_minutes: int = 20, store_ids: list[str] | None = None,
+                 item_frac: float | None = None, item_seed: int = 0):
         """layout="long": v0-v3 snapshot (long sales.parquet; holdout cut from the snapshot).
         layout="wide": compact wide sales.parquet (one row per series, one int16 column per
         day) and the holdout taken from sales_train_evaluation.csv's 28 extra days
@@ -81,6 +82,8 @@ class M5Adapter:
         self.layout = layout
         self.timeout_minutes = timeout_minutes
         self.store_ids = store_ids  # a subset of stores (wide layout); None = store_id filter or all
+        self.item_frac = item_frac  # v8 screen: keep this fraction of items (all stores) for a non-degenerate fast screen
+        self.item_seed = item_seed
         self.raw = ROOT / "data" / dataset_id / "raw"
         self.snapshot_dir = ROOT / "data" / dataset_id / "snapshot"
         self.holdout_dir = ROOT / "holdout" / dataset_id
@@ -123,6 +126,15 @@ class M5Adapter:
         if self.dept_id is not None:
             mask &= sales["dept_id"] == self.dept_id
         sales = sales[mask].copy()
+        if self.item_frac is not None:
+            # keep a deterministic fraction of items across ALL stores: the full store/state
+            # hierarchy is preserved (unlike m5_3's one-store-per-state), only the item count
+            # is thinned, for a fast screen whose aggregation structure matches m5_all.
+            import numpy as _np
+            items = _np.sort(sales["item_id"].unique())
+            k = int(round(len(items) * self.item_frac))
+            keep = set(_np.random.default_rng(self.item_seed).choice(items, size=k, replace=False))
+            sales = sales[sales["item_id"].isin(keep)].copy()
         if sales.empty:
             raise SystemExit(f"No rows for store {self.store_id or 'ALL'} / dept {self.dept_id or 'ALL'}.")
         id_cols = ["id", "item_id", "dept_id", "cat_id", "store_id", "state_id"]
