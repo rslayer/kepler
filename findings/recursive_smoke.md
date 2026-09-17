@@ -1,21 +1,28 @@
-# Recursive member smoke (H161) — not competitive out of the box
+# Recursive member (H161) — not competitive; a hard calibration problem
 
-**Model:** lgbm_recursive (src/recursive.py), 1-step LGBM applied recursively over 28 days.
-Smoke: m5_3 fold 8 (28 Mar), seed 42, scratch run (not logged canonically).
+The recursive 1-step forecaster (src/recursive.py) as an ensemble member for the direct
+recipe. Smoke tests on m5_3 fold 8 (28 Mar), seed 42 (scratch runs; degenerate hierarchy is
+irrelevant for judging the member's own accuracy/bias). Recipe on this fold: hier **0.538**.
 
-**Result:** hier 0.702 vs recipe6_calendar_l2 0.538 on the same fold. Worse at every horizon
-bucket (WAPE h1-7 0.773 vs 0.748; h8-14 0.777 vs 0.744; h15-28 0.802 vs 0.773) and heavily
-over-forecasting (bias +9.9% vs the recipe's +0.5%).
+| variant | objective / target | hier | bias | note |
+|---|---|---|---|---|
+| lgbm_recursive | regression | 0.702 | +9.9% | over-forecasts, compounds |
+| lgbm_recursive_tw | Tweedie 1.1 | 0.701 | +9.6% | objective does not fix the drift |
+| lgbm_recursive_log | log1p target | 1.126 | −21.2% | over-corrects; aggregate WRMSSE blows up |
 
-**Diagnosis:** two problems. (1) The recursive 1-step model is simply less accurate than the
-recipe's direct multi-horizon design even at short horizons — it lacks the recipe's richer
-features (price-relative-to-group, event lead/lag, days-since-sale, target-relative lags).
-(2) Small 1-step over-predictions compound along the horizon into a +9.9% bias.
+**Diagnosis.** A point 1-step model of intermittent demand never predicts exact zeros; the
+small positive predictions feed forward into the lags and compound into a ~+10% over-forecast
+(regression and Tweedie alike). Moving to a log1p target swings it to −21% (predicting the
+mean in log space then exponentiating under-predicts the arithmetic mean, and the aggregate
+levels blow up). The true calibration is somewhere between raw and log — a hard problem, not
+a one-line objective swap.
 
-**Consequence:** averaging this member with the recipe would drag the ensemble down, exactly
-as the Tweedie member did (H160). An ensemble needs members of SIMILAR quality; this one is
-not there yet.
+**Consequence.** For an ensemble to help, the member must be within ~0.02-0.03 of the recipe
+(0.538) with decorrelated errors. The best recursive variant (0.701) is 0.16 away — averaging
+it in makes things worse, like the Tweedie ensemble (H160). The recursive member needs real
+calibration work (a middle transform, an explicit recursive-bias correction, or multi-step
+training) before it can ensemble. Three principled attempts did not get there.
 
-**To make it viable (next build):** bring the recursive feature set up to the recipe's, and
-control the compounding bias (a count-appropriate objective such as Tweedie/Poisson on the
-1-step model, or explicit debiasing). Multi-iteration work with uncertain payoff.
+**Verdict:** recursive+direct ensemble not achievable without solving recursive calibration —
+genuine research, not an overnight tune. Recorded; recursive variants stay registered as
+documented experiments.
