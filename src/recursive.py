@@ -56,6 +56,9 @@ def _features_at(vext: np.ndarray, price: np.ndarray, snap: np.ndarray, dow: np.
     return f
 
 
+PARAMS_TWEEDIE = {**PARAMS, "objective": "tweedie", "tweedie_variance_power": 1.1}
+
+
 class RecursiveForecaster:
     name = "lgbm_recursive"
     PARAMS = PARAMS
@@ -121,3 +124,14 @@ class RecursiveForecaster:
         return pd.DataFrame({"id": np.repeat(panel.ids, horizon),
                              "date": np.tile(dates.to_numpy(), len(panel.ids)),
                              "forecast": preds.reshape(-1)})
+
+
+class RecursiveForecasterTweedie(RecursiveForecaster):
+    """Recursive 1-step under a Tweedie objective (variance power 1.1). Tweedie models a
+    non-negative, zero-inflated target, so its predictions are naturally >= 0 and better
+    calibrated for intermittent demand than a regression model whose negative predictions get
+    clipped to 0 (that clip inflates the mean, and in a recursive model the inflation compounds
+    into the +9.9% bias seen with the regression member)."""
+
+    name = "lgbm_recursive_tw"
+    PARAMS = PARAMS_TWEEDIE

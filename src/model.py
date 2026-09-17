@@ -629,7 +629,7 @@ class LGBMRecipeCalib(LGBMRecipeBag3):
         return pred * f
 
 
-from .recursive import RecursiveForecaster as _RecursiveForecaster
+from .recursive import RecursiveForecaster as _RecursiveForecaster, RecursiveForecasterTweedie as _RecursiveForecasterTweedie
 
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
@@ -652,6 +652,7 @@ MODELS: dict[str, type] = {
     LGBMRecipeEnsembleObj.name: LGBMRecipeEnsembleObj,
     LGBMRecipeEnsembleRD.name: LGBMRecipeEnsembleRD,
     _RecursiveForecaster.name: _RecursiveForecaster,
+    _RecursiveForecasterTweedie.name: _RecursiveForecasterTweedie,
     LGBMRecipe6PerStore.name: LGBMRecipe6PerStore,
     LGBMRecipe6PerStoreCorr.name: LGBMRecipe6PerStoreCorr,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
