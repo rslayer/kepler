@@ -415,6 +415,28 @@ class LGBMRecipeEnsembleObj(LGBMRecipe6CalendarL2):
         return m[["id", "date", "forecast"]]
 
 
+class LGBMRecipeEnsembleRD(LGBMRecipe6CalendarL2):
+    """Recursive + direct ensemble (the M5 winners' core blend): the mean of the direct
+    multi-horizon recipe (recipe6_calendar_l2) and the recursive 1-step model
+    (src/recursive.py). Their errors are structured differently — the recipe fixes features
+    at the origin, the recursive model compounds along the horizon — so averaging decorrelates.
+    Aggregation-neutral. Run with bag_seeds on. Fits the recipe (4 direct models) plus one
+    recursive model per seed."""
+
+    name = "recipe_ens_rd"
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "ensemble": ["recipe6_calendar_l2", "lgbm_recursive"]}
+
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        from .recursive import RecursiveForecaster
+        direct = super().forecast(panel, origin, horizon, seed)
+        rec = RecursiveForecaster().forecast(panel, origin, horizon, seed)
+        m = direct.merge(rec, on=["id", "date"], suffixes=("_d", "_r"))
+        m["forecast"] = 0.5 * (m["forecast_d"] + m["forecast_r"])
+        return m[["id", "date", "forecast"]]
+
+
 class LGBMRecipeReconciled(LGBMRecipe6CalendarL2):
     """Middle-out multiplicative reconciliation (SPEC_v7): forecast a smooth aggregate level
     independently and scale the recipe's item-store forecasts within each group so their sum
@@ -607,6 +629,8 @@ class LGBMRecipeCalib(LGBMRecipeBag3):
         return pred * f
 
 
+from .recursive import RecursiveForecaster as _RecursiveForecaster
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -626,6 +650,8 @@ MODELS: dict[str, type] = {
     LGBMRecipeReconciled.name: LGBMRecipeReconciled,
     LGBMRecipe6CalendarL2Tweedie.name: LGBMRecipe6CalendarL2Tweedie,
     LGBMRecipeEnsembleObj.name: LGBMRecipeEnsembleObj,
+    LGBMRecipeEnsembleRD.name: LGBMRecipeEnsembleRD,
+    _RecursiveForecaster.name: _RecursiveForecaster,
     LGBMRecipe6PerStore.name: LGBMRecipe6PerStore,
     LGBMRecipe6PerStoreCorr.name: LGBMRecipe6PerStoreCorr,
     LGBMRecipeBag3.name: LGBMRecipeBag3,
