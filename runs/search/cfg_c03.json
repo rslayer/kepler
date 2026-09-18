@@ -1,0 +1,6 @@
+{
+  "label": "min_child_50",
+  "params": {
+    "min_child_samples": 50
+  }
+}
