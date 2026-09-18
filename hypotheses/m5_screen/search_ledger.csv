@@ -1,1 +1,2 @@
 cycle,run_id,label,agg_hier,agg_gain,spring_gain,keep_verdict,spring_gate,config
+1,r137,easter_anchor,0.683412,+0.005926,+0.004078,kept,PASS,"{""label"": ""easter_anchor"", ""yoy_easter_window"": 21}"
