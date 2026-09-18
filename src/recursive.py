@@ -62,7 +62,8 @@ PARAMS_TWEEDIE = {**PARAMS, "objective": "tweedie", "tweedie_variance_power": 1.
 class RecursiveForecaster:
     name = "lgbm_recursive"
     PARAMS = PARAMS
-    LOG_TARGET = False
+    LOG_TARGET = False        # legacy flag (log1p); TRANSFORM takes precedence when set
+    TRANSFORM = None          # None | "log1p" | "sqrt": target transform to curb the recursive over-forecast
 
     def config(self) -> dict:
         return {"kind": self.name, "lags": list(LAGS), "rolls": list(ROLLS),
@@ -100,8 +101,11 @@ class RecursiveForecaster:
         for c in cats:
             train[c] = pd.Categorical(train[c])
         y = np.concatenate(targets).astype(np.float64)
-        if self.LOG_TARGET:
+        tf = self.TRANSFORM or ("log1p" if self.LOG_TARGET else None)
+        if tf == "log1p":
             y = np.log1p(y)
+        elif tf == "sqrt":
+            y = np.sqrt(y)
         params = dict(self.PARAMS); params.update(random_state=seed, seed=seed, bagging_seed=seed, feature_fraction_seed=seed)
         model = lgb.LGBMRegressor(**params)
         model.fit(train[feat_names], y, categorical_feature=list(cats))
@@ -121,7 +125,11 @@ class RecursiveForecaster:
             for c in cats:
                 x[c] = pd.Categorical(x[c], categories=cats[c].categories)
             yhat = model.predict(x[feat_names])
-            yhat = np.clip(np.expm1(yhat) if self.LOG_TARGET else yhat, 0.0, None)
+            if tf == "log1p":
+                yhat = np.expm1(yhat)
+            elif tf == "sqrt":
+                yhat = np.square(np.clip(yhat, 0.0, None))
+            yhat = np.clip(yhat, 0.0, None)
             vext[:, t] = yhat  # overwrite so subsequent lags/rolls use the prediction
             preds[:, h - 1] = yhat
         dates = pd.DatetimeIndex([pd.Timestamp(origin) + pd.Timedelta(days=h) for h in range(horizon)])
@@ -148,3 +156,12 @@ class RecursiveForecasterLog(RecursiveForecaster):
 
     name = "lgbm_recursive_log"
     LOG_TARGET = True
+
+
+class RecursiveForecasterSqrt(RecursiveForecaster):
+    """Recursive 1-step on a sqrt target: milder than log1p, it sits between the raw model's
+    +9.6% over-forecast and the log model's -21% under-forecast, so the recursive bias should
+    land closer to zero."""
+
+    name = "lgbm_recursive_sqrt"
+    TRANSFORM = "sqrt"
