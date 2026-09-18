@@ -69,6 +69,22 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v8 field note — the holdout gate catches a backtest-winner (recipe_ens_rd) — 2026-09-17
+
+The clearest demonstration yet that a frozen holdout is necessary. A recursive+direct ensemble
+(the recipe averaged with a debiased recursive 1-step model) beat the champion recipe on EVERY
+backtest measure: the m5_screen filter (0.708 vs 0.733, 8/8 folds), the strict m5_all gate
+(r131: 0.674 vs 0.695, 7/8 folds, every level L1-L12 better). By the backtest it was a clean,
+broad win. **The frozen holdout rejected it**: yardstick 0.644 vs the recipe's 0.626 (bias
+-4.1% vs -2.5%). The backtest folds are winter; the evaluation period is spring; the debiased
+recursive member helps winter and under-forecasts spring, so the ensemble's backtest gain does
+not generalise to the held-out window. Not promoted (condition 4 fails). Because the recursive
+member is strictly worse on the holdout, no ensemble weight can beat the recipe there - the
+path is closed, and re-weighting to fish for a passing holdout would corrupt the one-shot gate.
+Lesson banked: the m5_all backtest is not a substitute for the yardstick; even an all-levels,
+both-tiers backtest win can be a window-specific mirage. The recipe (0.626) remains the only
+validated best and stays champion/m5_all/v1.
+
 ## v8 — a trustworthy screen (m5_screen), adopted as a directional filter — 2026-09-17 (tag `v8-screen`)
 
 The m5_3 screen was structurally degenerate (one store per state: state==store, total = 3
