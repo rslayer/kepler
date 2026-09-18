@@ -426,12 +426,12 @@ class LGBMRecipeEnsembleRD(LGBMRecipe6CalendarL2):
     name = "recipe_ens_rd"
 
     def extra_config(self) -> dict:
-        return {**super().extra_config(), "ensemble": ["recipe6_calendar_l2", "lgbm_recursive"]}
+        return {**super().extra_config(), "ensemble": ["recipe6_calendar_l2", "lgbm_recursive_dbc"]}
 
     def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
-        from .recursive import RecursiveForecaster
+        from .recursive import RecursiveForecasterDebiased
         direct = super().forecast(panel, origin, horizon, seed)
-        rec = RecursiveForecaster().forecast(panel, origin, horizon, seed)
+        rec = RecursiveForecasterDebiased().forecast(panel, origin, horizon, seed)
         m = direct.merge(rec, on=["id", "date"], suffixes=("_d", "_r"))
         m["forecast"] = 0.5 * (m["forecast_d"] + m["forecast_r"])
         return m[["id", "date", "forecast"]]
