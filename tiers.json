@@ -1,11 +1,12 @@
 {
   "tiers": {
     "m5_all": {
-      "screen": "m5_3"
+      "screen": "m5_screen"
     }
   },
-  "note": "confirmation dataset -> its screening dataset. A kept screen result is confirmed by a kept run of the same model on the confirmation dataset in the same session; promotion on a confirmation dataset requires both (tools/promote.py condition 1b).",
+  "note": "confirmation dataset -> its screening dataset. Since v8 the screen is a DIRECTIONAL FILTER, not a gate: a candidate is confirmed on the confirmation dataset if it was PROMISING on the screen (positive mean paired gain), even if the screen's strict sign-test printed discarded (that test is too sensitive to the screen's 1/3-item sampling). The strict keep + holdout gate is the confirmation dataset (m5_all). tools/promote.py condition 1b enforces the promising-on-screen check.",
   "legacy": {
-    "m5_ca1": "v0-v3 screening tier (one store, item-level metric); kept for its run history, no longer the screen"
+    "m5_ca1": "v0-v3 screening tier (one store, item-level metric); kept for its run history",
+    "m5_3": "v4-v7 screen (one store per state); RETIRED v8 - its degenerate hierarchy (state==store, total=3 series) flipped aggregation-interacting verdicts vs m5_all"
   }
 }

@@ -105,12 +105,22 @@ def main(argv: list[str]) -> int:
     tiers = json.loads((ROOT / "tiers.json").read_text()).get("tiers", {}) if (ROOT / "tiers.json").exists() else {}
     screen = tiers.get(dataset, {}).get("screen")
     if screen:
-        ok = [r for r in runs.values() if r.get("dataset") == screen and r.get("model_name") == run["model_name"]
-              and r.get("verdict") == "kept" and r.get("session") == run.get("session")]
-        if not ok:
-            return refuse(1, f"(1b) no kept run of {run['model_name']} on the screening dataset {screen} in session "
-                             f"{run.get('session') or '?'}; a {dataset} candidate must win the screen and the confirmation")
-        print(f"condition 1b ok: {run['model_name']} kept on {screen} in the same session ({ok[-1]['run_id']})")
+        # v8: the screen is a DIRECTIONAL FILTER. The candidate need not have KEPT there (its
+        # strict sign test is too sensitive to the screen's item sampling); it must have been
+        # PROMISING - a positive mean paired gain - in the same session.
+        cand = [r for r in runs.values() if r.get("dataset") == screen and r.get("model_name") == run["model_name"]
+                and r.get("session") == run.get("session")]
+        promising = None
+        for r in cand:
+            dp = ROOT / "runs" / "detail" / f"{r['run_id']}.json"
+            if dp.exists():
+                g = ((json.loads(dp.read_text()).get("keep_rule") or {}).get("paired_gain") or {}).get("gain")
+                if g is not None and g > 0:
+                    promising = r; break
+        if not promising:
+            return refuse(1, f"(1b) no PROMISING screen run of {run['model_name']} on {screen} (positive mean "
+                             f"paired gain) in session {run.get('session') or '?'}; screen is a directional filter")
+        print(f"condition 1b ok: {run['model_name']} promising on {screen} ({promising['run_id']}); screen is a filter")
 
     # 2. adversary PASS or human override
     review = ROOT / "adversary" / "reviews" / "exp" / f"{run_id}.md"

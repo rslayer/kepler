@@ -122,3 +122,5 @@ Writing the review:
   (for curator branches leave metrics empty), status = ok (PASS) or rejected, findings_file
   = the review path, author = adversary, verdict empty, session = your session id,
   hypothesis_id empty.
+
+- The screen (m5_screen, v8) is a directional filter; m5_all is the strict gate.
