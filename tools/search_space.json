@@ -1,0 +1,10 @@
+{
+  "hypothesis": "H168",
+  "note": "First loop batch on the v9 proxy. Spring-gated: a config passes only if it improves the aggregate AND does not regress the two spring folds (the hist3y lesson). Holdout untouched.",
+  "configs": [
+    {"label": "easter_anchor", "yoy_easter_window": 21},
+    {"label": "leaves255", "params": {"num_leaves": 255}},
+    {"label": "min_child_50", "params": {"min_child_samples": 50}},
+    {"label": "easter+leaves255", "yoy_easter_window": 21, "params": {"num_leaves": 255}}
+  ]
+}

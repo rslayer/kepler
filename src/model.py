@@ -463,6 +463,58 @@ class LGBMRecipe6CalendarL2YoYEHist3y(LGBMRecipe6CalendarL2YoYEaster):
     TRAIN_ORIGIN_SPACING = 28
 
 
+class LGBMRecipeSearch(LGBMRecipe6CalendarL2):
+    """Config-driven recipe variant for the parameterized self-improvement loop. The orchestrator
+    writes a JSON config to $KEPLER_SEARCH_CONFIG and runs this model; behaviour is fully
+    determined by that file, so the loop searches the space WITHOUT writing code. config() embeds
+    the whole config so every run's hash is unique and the variant is recoverable from its detail
+    JSON. The holdout is never involved. Config keys (all optional):
+      params: dict merged onto the L2 LightGBM params (num_leaves, min_child_samples, ...)
+      train_origin_spacing / n_train_origins: training-window shape
+      yoy_easter_window: int -> add the Easter-phase YoY anchor (tlag_yoy); null -> off
+      extra_target_lags: [k, ...] -> add tlag_k features
+      label: human note (recorded, not used)"""
+
+    name = "recipe_search"
+
+    def __init__(self):
+        import json, os
+        path = os.environ.get("KEPLER_SEARCH_CONFIG")
+        self._cfg = json.load(open(path)) if path and os.path.exists(path) else {}
+        self.PARAMS = {**_L2, **self._cfg.get("params", {})}
+        self.TRAIN_ORIGIN_SPACING = int(self._cfg.get("train_origin_spacing", 7))
+        self.N_TRAIN_ORIGINS = int(self._cfg.get("n_train_origins", 40))
+        self._yoy_window = self._cfg.get("yoy_easter_window")  # None or int
+        self._extra_lags = tuple(self._cfg.get("extra_target_lags", []))
+
+    @property
+    def features(self) -> list[str]:
+        feats = list(super().features)
+        feats += [f"tlag_{k}" for k in self._extra_lags]
+        if self._yoy_window is not None:
+            feats += ["tlag_yoy"]
+        return feats
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "search_config": self._cfg}
+
+    def forecast(
+        self, panel: Panel, origin: pd.Timestamp, horizon: int = HORIZON, seed: int = 42
+    ) -> pd.DataFrame:
+        train = build_training_set(
+            panel, origin, n_origins=self.N_TRAIN_ORIGINS,
+            spacing_days=self.TRAIN_ORIGIN_SPACING, horizon=horizon,
+            extra_target_lags=self._extra_lags, yoy_easter_window=self._yoy_window,
+        )
+        predict = build_frame(panel, origin, horizon, with_target=False,
+                              extra_target_lags=self._extra_lags, yoy_easter_window=self._yoy_window)
+        preds = self._fit_predict(train, predict, seed)
+        preds = self.postprocess(predict, preds)
+        out = predict[["id", "date"]].copy()
+        out["forecast"] = np.clip(preds, 0.0, None)
+        return out
+
+
 class LGBMXmasThanksgivingDept(LGBMChristmasZero):
     """H041 (retest of H039 on the champion): multiply the Christmas-zeroed forecast on
     Thanksgiving Day and the three days after it by the department's mean prior-year ratio of
@@ -748,6 +800,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
     LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
     LGBMRecipe6CalendarL2YoYEHist3y.name: LGBMRecipe6CalendarL2YoYEHist3y,
+    LGBMRecipeSearch.name: LGBMRecipeSearch,
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
     LGBMRecipeReconciled.name: LGBMRecipeReconciled,
