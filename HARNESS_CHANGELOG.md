@@ -69,6 +69,29 @@ m5_all recipe run after 95 minutes; fixed and rerun. The headless allowlist must
 env-var-prefixed commands (`Bash(KEPLER_RUNS_DIR=*)`); cycle.sh now warns when an adversary
 session logs no reruns.
 
+## v8 — a trustworthy screen (m5_screen), adopted as a directional filter — 2026-09-17 (tag `v8-screen`)
+
+The m5_3 screen was structurally degenerate (one store per state: state==store, total = 3
+series) and disagreed with m5_all in both directions - the recipe screened as discarded but
+wins m5_all, reconciliation screened as kept but loses m5_all. v8 replaces it with m5_screen:
+ALL 10 stores and 3 states (the full hierarchy) with a deterministic 1/3 item sample (10,160
+series, m5_3-scale, ~2x faster than m5_all on the recipe). src/adapters/m5.py gains an
+`item_frac` param; the eval labels are quarantined by the human-run `make holdout`.
+
+**Validation (r127-r129).** Reconciliation: DISCARD on m5_screen (matches m5_all) - the m5_3
+error is fixed. Recipe: mean gain +0.068 on m5_screen (m5_all +0.087, same direction) but the
+strict sign test discards it at 6/8 folds where m5_all keeps 8/8 - one fold (18 Jan) is a
+-0.0008 near-tie that the 1/3 item sample tipped negative. So the screen is directionally
+faithful but its strict fold-level verdict is too sensitive to sampling.
+
+**Adopted as a DIRECTIONAL FILTER (human decision).** The screen's job is triage: a positive
+mean paired gain there means "promising -> confirm on m5_all", even if the strict sign test
+printed discarded. m5_all stays the strict keep+holdout gate. tiers.json points m5_all's
+screen at m5_screen; CLAUDE.md step 7a and promote.py condition 1b use the promising (positive
+mean gain) criterion, not a strict screen keep; m5_3 retired to legacy. This unblocks fast,
+trustworthy iteration - the recipe is now correctly promising on the screen, reconciliation
+correctly not.
+
 ## v7 field notes — reconciliation, and the screen is an unreliable proxy — 2026-09-16
 
 SPEC_v7 built middle-out multiplicative reconciliation (src/reconcile.py, recipe6_reconciled):
