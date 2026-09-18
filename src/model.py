@@ -442,6 +442,27 @@ class LGBMRecipe6CalendarL2YoYEaster(LGBMRecipe6CalendarL2):
         return out
 
 
+class LGBMRecipe6CalendarL2Hist3y(LGBMRecipe6CalendarL2):
+    """Play B core lever: widen the training span from ~280 days to ~3 years at the SAME row
+    count. The base uses 40 origins at 7-day spacing (280 days) — with a 28-day horizon each
+    day is covered ~4x, so most of those rows are redundant overlap. Spacing 28 keeps 40 origins
+    but spans ~1120 days (~3 years), trading intra-window redundancy for THREE prior years incl.
+    prior springs — so the model has finally trained on the season it forecasts. Everything else
+    is recipe6_calendar_l2 unchanged; only the training-origin spacing moves."""
+
+    name = "recipe6_calendar_l2_hist3y"
+    TRAIN_ORIGIN_SPACING = 28
+
+
+class LGBMRecipe6CalendarL2YoYEHist3y(LGBMRecipe6CalendarL2YoYEaster):
+    """Both play-B levers together: the Easter-phase YoY anchor (validated ingredient, r133) on
+    top of the 3-year training span. The stack the year-round proxy should reward if both the
+    spring-level anchor and the longer history generalize."""
+
+    name = "recipe6_calendar_l2_yoye_h3y"
+    TRAIN_ORIGIN_SPACING = 28
+
+
 class LGBMXmasThanksgivingDept(LGBMChristmasZero):
     """H041 (retest of H039 on the champion): multiply the Christmas-zeroed forecast on
     Thanksgiving Day and the three days after it by the department's mean prior-year ratio of
@@ -725,6 +746,8 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipe6CalendarL2YoY.name: LGBMRecipe6CalendarL2YoY,
     LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
+    LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
+    LGBMRecipe6CalendarL2YoYEHist3y.name: LGBMRecipe6CalendarL2YoYEHist3y,
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
     LGBMRecipeReconciled.name: LGBMRecipeReconciled,
