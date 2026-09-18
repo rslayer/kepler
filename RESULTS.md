@@ -42,6 +42,28 @@ hashes: 120 rows, 0 unresolvable hashes; r032's shifted row realigned; r100–r1
 JSONs were lost in the v4 renumbering and are recorded as such (findings/r100–r102.md; the
 identical reruns are r103, r106, r104). Runs r114–r120 all carry clean hashes.
 
+## v6-v8 state — 2026-09-17
+
+**Champion promoted.** recipe6_calendar_l2 is champion/m5_all/v1 (backtest hier 0.698 vs
+baseline 0.785; clean holdout **0.626358** on a re-scored, committed row). On the M5
+leaderboard scale it beats every published benchmark (best is ES_bu 0.671) and sits ~0.05
+above rank-50 (0.576); the winner is 0.520. It is a strong single deterministic model.
+
+**Keep rule (v6/v6.1).** Two defects fixed: condition 1 now tests the paired per-fold gain
+against its own uncertainty via a one-sided SIGN TEST (magnitude-independent), plus a median-
+gain guard; the old "2x the noisier run's spread" bar and the mean-vs-SE interim both mis-fired.
+Validated on the run corpus (tools/validate_keeprule.py).
+
+**Screen (v8).** The degenerate m5_3 screen (one store per state) is retired; the screen is
+m5_screen (all 10 stores, 1/3 items), adopted as a DIRECTIONAL FILTER (positive mean gain ->
+confirm on m5_all; m5_all is the strict keep+holdout gate). It reproduces m5_all's direction
+where m5_3 flipped it.
+
+**The holdout gate works.** A recursive+direct ensemble beat the recipe on every backtest
+level and both tiers, but the frozen holdout rejected it (0.644 vs 0.626) - a winter-backtest
+win that did not generalise to the spring evaluation period. Not promoted. This is the harness
+catching a backtest mirage, exactly what the frozen holdout is for.
+
 ## The five numbers
 
 ### 1. Researcher runs per hour: **49**
