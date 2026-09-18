@@ -64,6 +64,7 @@ class RecursiveForecaster:
     PARAMS = PARAMS
     LOG_TARGET = False        # legacy flag (log1p); TRANSFORM takes precedence when set
     TRANSFORM = None          # None | "log1p" | "sqrt": target transform to curb the recursive over-forecast
+    DEBIAS = False            # scale the horizon by sum(actual)/sum(pred) measured on a recursive forecast of the pre-origin window
 
     def config(self) -> dict:
         return {"kind": self.name, "lags": list(LAGS), "rolls": list(ROLLS),
@@ -110,28 +111,41 @@ class RecursiveForecaster:
         model = lgb.LGBMRegressor(**params)
         model.fit(train[feat_names], y, categorical_feature=list(cats))
 
-        # --- recursive forecast. The fold window is [origin, origin+27]; the origin day is
-        # the first forecast day (column o). vext holds actuals before o; as each day is
-        # predicted its column is overwritten so later lags read predictions, never the
-        # window's actuals. A horizon buffer covers a post-snapshot origin (o+h-1 >= n_days).
-        vext = np.concatenate([panel.values.copy(), np.zeros((len(panel.ids), horizon), np.float32)], axis=1)
-        preds = np.empty((len(panel.ids), horizon), dtype=np.float64)
-        for h in range(1, horizon + 1):
-            t = o + (h - 1)  # target column: origin+ (h-1)
-            fr = _features_at(vext, price, snap, dow, month, event, xmas, t)
-            for c, v in cats.items():
-                fr[c] = v
-            x = pd.DataFrame(fr)
-            for c in cats:
-                x[c] = pd.Categorical(x[c], categories=cats[c].categories)
-            yhat = model.predict(x[feat_names])
-            if tf == "log1p":
-                yhat = np.expm1(yhat)
-            elif tf == "sqrt":
-                yhat = np.square(np.clip(yhat, 0.0, None))
-            yhat = np.clip(yhat, 0.0, None)
-            vext[:, t] = yhat  # overwrite so subsequent lags/rolls use the prediction
-            preds[:, h - 1] = yhat
+        def rec_predict(start_col: int, n: int) -> np.ndarray:
+            """Recursively predict n days starting at column start_col; returns (n_series, n).
+            vext holds actuals before start_col and predictions overwrite as we go."""
+            vext = np.concatenate([panel.values.copy(), np.zeros((len(panel.ids), max(horizon, n)), np.float32)], axis=1)
+            vext[:, start_col:] = 0.0  # do not let the loop read actuals at/after the first predicted day
+            out = np.empty((len(panel.ids), n), dtype=np.float64)
+            for i in range(n):
+                t = start_col + i
+                fr = _features_at(vext, price, snap, dow, month, event, xmas, t)
+                for c, v in cats.items():
+                    fr[c] = v
+                x = pd.DataFrame(fr)
+                for c in cats:
+                    x[c] = pd.Categorical(x[c], categories=cats[c].categories)
+                yhat = model.predict(x[feat_names])
+                if tf == "log1p":
+                    yhat = np.expm1(yhat)
+                elif tf == "sqrt":
+                    yhat = np.square(np.clip(yhat, 0.0, None))
+                yhat = np.clip(yhat, 0.0, None)
+                vext[:, t] = yhat
+                out[:, i] = yhat
+            return out
+
+        preds = rec_predict(o, horizon)
+        if self.DEBIAS:
+            # correct the systematic recursive over-forecast: recursively predict the 28 days
+            # BEFORE the origin (known actuals) and scale the horizon by sum(actual)/sum(pred).
+            vs = o - horizon
+            if vs >= max(LAGS + ROLLS):
+                vpred = rec_predict(vs, horizon)
+                actual = panel.values[:, vs:o].astype(np.float64)
+                sp, sa = vpred.sum(), actual.sum()
+                factor = float(np.clip(sa / sp, 0.5, 1.5)) if sp > 1e-9 else 1.0
+                preds *= factor
         dates = pd.DatetimeIndex([pd.Timestamp(origin) + pd.Timedelta(days=h) for h in range(horizon)])
         return pd.DataFrame({"id": np.repeat(panel.ids, horizon),
                              "date": np.tile(dates.to_numpy(), len(panel.ids)),
@@ -165,3 +179,14 @@ class RecursiveForecasterSqrt(RecursiveForecaster):
 
     name = "lgbm_recursive_sqrt"
     TRANSFORM = "sqrt"
+
+
+class RecursiveForecasterDebiased(RecursiveForecaster):
+    """Raw recursive with a measured multiplicative debias: recursively forecast the 28 days
+    BEFORE the origin (known actuals), measure the total over/under-forecast there, and scale
+    the horizon by sum(actual)/sum(pred) (clipped [0.5, 1.5]). The recursive over-forecast is
+    systematic (compounding), so a factor measured on the immediately-preceding window should
+    correct it - unlike a data-dependent per-series calibration (which does not persist)."""
+
+    name = "lgbm_recursive_dbc"
+    DEBIAS = True
