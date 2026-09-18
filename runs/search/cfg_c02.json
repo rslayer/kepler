@@ -1,0 +1,6 @@
+{
+  "label": "leaves255",
+  "params": {
+    "num_leaves": 255
+  }
+}
