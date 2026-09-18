@@ -271,6 +271,7 @@ def build_frame(
     origin: pd.Timestamp,
     horizon: int = HORIZON,
     with_target: bool = False,
+    extra_target_lags: tuple = (),
 ) -> pd.DataFrame:
     """One (series x horizon) feature frame for a single origin.
 
@@ -336,7 +337,8 @@ def build_frame(
     frame["day_of_month"] = frame["date"].dt.day.astype("int16")
     frame["week_of_year"] = frame["date"].dt.isocalendar().week.astype("int16").to_numpy()
 
-    for k in TARGET_LAGS:
+    _lag_ks = list(TARGET_LAGS) + [k for k in extra_target_lags if k not in TARGET_LAGS]
+    for k in _lag_ks:
         col = np.full((n_series, horizon), np.nan, dtype=np.float32)
         for h in range(1, horizon + 1):
             src = origin_pos + h - 1 - k
@@ -388,10 +390,11 @@ def build_training_set(
     n_origins: int = 40,
     spacing_days: int = 7,
     horizon: int = HORIZON,
+    extra_target_lags: tuple = (),
 ) -> pd.DataFrame:
     """Stack feature frames over simulated origins to form the training matrix."""
     origins = training_origins(panel, fold_origin, n_origins, spacing_days, horizon)
-    frames = [build_frame(panel, o, horizon, with_target=True) for o in origins]
+    frames = [build_frame(panel, o, horizon, with_target=True, extra_target_lags=extra_target_lags) for o in origins]
     out = pd.concat(frames, ignore_index=True)
     for col in CATEGORICAL_COLUMNS:
         out[col] = out[col].astype("category")

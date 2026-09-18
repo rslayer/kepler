@@ -1,0 +1,2 @@
+hypothesis_id,status,summary,first_run,last_run,sessions,evidence
+H164,investigate,"Generalization play A: same-weekday-last-year level anchor (tlag_364) on the champion (recipe6_calendar_l2_yoy). Direct recipe carries recent (winter, in-backtest) level into the window; the frozen yardstick is a SPRING window winter folds never contain. tlag_364 gives last-year's level per target day, leak-free (k>>horizon). Aim: generalize to spring, not just lower backtest error",,,research-20260918-1,
