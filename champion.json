@@ -36,17 +36,31 @@
   },
   "m5_all": {
     "dataset": "m5_all",
-    "model_name": "lgbm_baseline",
-    "git_tag": "v4/part-a",
-    "config_hash": "900159c6f3dd",
-    "backtest_run": "r083",
-    "backtest_wrmsse": 0.86167,
-    "backtest_wrmsse_hier": 0.785019,
-    "holdout_wrmsse": 0.723437,
-    "holdout_note": "yardstick scored 2026-09-14 (make score-holdout MODEL=lgbm_baseline DATASET=m5_all): wrmsse_hier 0.723437 on d_1914-d_1941, the competition's evaluation period; item-level 0.837618",
-    "promoted_at": null,
-    "promoted_by": "human (seed, SPEC_v4 Part B)",
-    "previous": null,
-    "holdout_metric": "wrmsse_hier"
+    "model_name": "recipe6_calendar_l2",
+    "git_tag": "champion/m5_all/v1",
+    "config_hash": "1c83fbc41e45",
+    "backtest_run": "r106",
+    "backtest_wrmsse": 0.850768,
+    "backtest_wrmsse_hier": 0.69822,
+    "holdout_wrmsse": 0.626358,
+    "holdout_metric": "wrmsse_hier",
+    "holdout_note": "clean re-score 2026-09-17 (make score-holdout --force on committed cb03fae, config 1ae10e30d56f): wrmsse_hier 0.626358 on the evaluation period d_1914-1941; beats every M5 benchmark, between rank-50 (0.576) and ES_bu (0.671). Supersedes the earlier dirty-tree score (identical value).",
+    "promoted_at": "2026-09-18T02:06:32+00:00",
+    "promoted_by": "human-directed (promote.py conditions verified: kept r106 chains to r083; recipe promising on the m5_screen filter r128 +0.068; frozen clean vs v8-screen; holdout 0.626 < baseline 0.723). Candidate is a harness-owner run, so promoted by decision rather than the exp/-branch flow.",
+    "previous": {
+      "dataset": "m5_all",
+      "model_name": "lgbm_baseline",
+      "git_tag": "v4/part-a",
+      "config_hash": "900159c6f3dd",
+      "backtest_run": "r083",
+      "backtest_wrmsse": 0.86167,
+      "backtest_wrmsse_hier": 0.785019,
+      "holdout_wrmsse": 0.723437,
+      "holdout_note": "yardstick scored 2026-09-14 (make score-holdout MODEL=lgbm_baseline DATASET=m5_all): wrmsse_hier 0.723437 on d_1914-d_1941, the competition's evaluation period; item-level 0.837618",
+      "promoted_at": null,
+      "promoted_by": "human (seed, SPEC_v4 Part B)",
+      "previous": null,
+      "holdout_metric": "wrmsse_hier"
+    }
   }
 }

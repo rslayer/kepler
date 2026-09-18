@@ -1,3 +1,5 @@
+# PROMOTED 2026-09-17 — the blocker below was cleared by a clean re-yardstick (identical 0.626358 on committed cb03fae). champion/m5_all/v1 = recipe6_calendar_l2 (r106). This file kept for the decision record.
+
 # Promotion PENDING — m5_all recipe → champion/m5_all/v1 (NOT executed)
 
 **Status:** prepared, blocked on a holdout audit-trail gap. champion.json is unchanged.
