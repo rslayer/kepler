@@ -1,5 +1,24 @@
 # Harness changelog
 
+## v9 — year-round backtest folds — 2026-09-18 (tag `v9-yearround`)
+
+Harness-owner edit (authorized): `src/backtest.py` `FOLD_SPACING` 14 -> 91. The v1-v8 layout
+placed all 8 folds at the end of the snapshot, spacing 14 -> origins Dec 21..Mar 28, a
+**winter-only** proxy. Since the frozen yardstick (d_1914-1941) is a spring window, a winter
+proxy cannot validate spring generalization: it rewarded winter-specific wins that failed the
+holdout (the recursive+direct ensemble, v8 field note, is the canonical case). Quarterly spacing
+(4*91~=365) lands folds at the same 4 calendar positions each year, so the 8 folds now span
+Jun 2014..Mar 2016 as **2 springs / 2 summers / 2 falls / 2 winters**; the two March folds
+(windows ending 2015-04-26 and 2016-04-24) are spring analogs of the holdout. Every fold still
+draws a full 40 training origins even at the wider `TRAIN_ORIGIN_SPACING=28` (~3yr) some models
+now use. `N_FOLDS` unchanged (8) so per-run compute is unchanged. Fold ORIGINS change, so the
+keep-rule fold-origin guard hard-fails any comparison to a pre-v9 parent -> every lineage must
+re-baseline under v9 (correct and enforced). Holdout scoring is fold-independent, so the
+champion's yardstick (0.626) is untouched. `FROZEN_REF` moved v8-screen -> v9-yearround; no other
+frozen file changed. Window calibration (same day): seasonal_naive on the yardstick = hier
+0.8697 vs published private-LB sNaive 0.847, so our window is ~2.7%% harder and rank-50 (0.576)
+rescales to ~0.591 -> the recipe (0.626) is ~0.035 from top-50, not 0.05.
+
 ## v5 Part A — seed-averaged forecasts — 2026-09-14 (SPEC_v5_certifiable.md; tag `v5-parta`)
 
 Until v4 a backtest fitted once per seed and scored the three forecasts separately, so the

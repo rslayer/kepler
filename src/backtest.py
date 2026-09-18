@@ -46,7 +46,10 @@ FINDINGS_DIR = ROOT / "findings"
 
 N_FOLDS = 8
 SEEDS = (42, 7, 123)  # every backtest fits once per seed per fold; metrics are logged as mean and spread
-FOLD_SPACING = 14  # days between consecutive fold origins; windows overlap by 14 days
+FOLD_SPACING = 91  # v9: quarterly. 4*91~=365 so folds land at the same 4 calendar
+                   # positions each year -> 2 springs/2 summers/2 falls/2 winters over the
+                   # last 2yr, ending at the snapshot. Retires the winter-only Dec-Mar layout
+                   # (spacing 14) that overfit winter and could not validate spring generalization.
 TIMEOUT_SECONDS = 20 * 60  # default; a Dataset may set timeout_minutes (m5_all: 90)
 
 RUN_COLUMNS = [
