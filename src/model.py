@@ -403,6 +403,45 @@ class LGBMRecipe6CalendarL2YoY(LGBMRecipe6CalendarL2):
         return out
 
 
+class LGBMRecipe6CalendarL2YoYEaster(LGBMRecipe6CalendarL2):
+    """Generalization play B: an Easter-phase-corrected same-weekday-last-year anchor.
+
+    Refinement of the YoY anchor (H164). That anchor's whole gain was January holiday-echo; on
+    the spring-facing folds it was net-negative because a fixed 364-day (52-week) lag MISALIGNS
+    Easter — Easter is lunar and moves ~a week year to year, so 364 reads a normal pre-Easter
+    Sunday instead of last Easter (every OTHER major US holiday is nth-weekday and 364 aligns it
+    correctly). `tlag_yoy` uses shift (Easter_this - Easter_last) within +/- EASTER_WINDOW days of
+    Easter and 364 elsewhere, so the anchor is phase-correct around Easter too. Leak-free: shift
+    is always >= ~357 days, so the source column is strictly before the origin (asserted in
+    build_frame). Everything else is recipe6_calendar_l2 unchanged. The decisive backtest read is
+    folds 6-7 (Feb29/Mar14 origins straddle Easter 2016), which should turn non-negative."""
+
+    name = "recipe6_calendar_l2_yoye"
+    EASTER_WINDOW = 21  # +/- days around Easter where the phase correction applies
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + ["tlag_yoy"]
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "yoy_anchor": "easter_phase", "easter_window": self.EASTER_WINDOW}
+
+    def forecast(
+        self, panel: Panel, origin: pd.Timestamp, horizon: int = HORIZON, seed: int = 42
+    ) -> pd.DataFrame:
+        train = build_training_set(
+            panel, origin, n_origins=self.N_TRAIN_ORIGINS,
+            spacing_days=self.TRAIN_ORIGIN_SPACING, horizon=horizon,
+            yoy_easter_window=self.EASTER_WINDOW,
+        )
+        predict = build_frame(panel, origin, horizon, with_target=False, yoy_easter_window=self.EASTER_WINDOW)
+        preds = self._fit_predict(train, predict, seed)
+        preds = self.postprocess(predict, preds)
+        out = predict[["id", "date"]].copy()
+        out["forecast"] = np.clip(preds, 0.0, None)
+        return out
+
+
 class LGBMXmasThanksgivingDept(LGBMChristmasZero):
     """H041 (retest of H039 on the champion): multiply the Christmas-zeroed forecast on
     Thanksgiving Day and the three days after it by the department's mean prior-year ratio of
@@ -685,6 +724,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipe6CalendarL2YoY.name: LGBMRecipe6CalendarL2YoY,
+    LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
     LGBMRecipeReconciled.name: LGBMRecipeReconciled,

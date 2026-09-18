@@ -266,12 +266,37 @@ def event_window_multipliers(
     return out
 
 
+
+def _easter(year: int) -> pd.Timestamp:
+    """Western (Gregorian) Easter Sunday for `year` via the Anonymous Gregorian computus.
+    Pure calendar arithmetic — no data is read, so any feature derived from it is leak-free."""
+    a = year % 19; b = year // 100; c = year % 100
+    d = b // 4; e = b % 4; f = (b + 8) // 25; g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30; i = c // 4; k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7; m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31; day = ((h + l - 7 * m + 114) % 31) + 1
+    return pd.Timestamp(year=year, month=month, day=day)
+
+
+def _yoy_source_shift(target_date: pd.Timestamp, easter_window: int) -> int:
+    """Days back from `target_date` to its same-phase day ~1 year earlier. Away from Easter this
+    is 364 (52 weeks, which preserves the weekday and correctly aligns every nth-weekday holiday).
+    Within +/- `easter_window` days of this year's Easter it is (Easter_this - Easter_last), which
+    lands on last year's Easter phase instead of a plain-364 day a week off it (Easter is lunar,
+    so 364 misaligns it by ~a week; every other major US holiday is nth-weekday and 364-aligned)."""
+    e_this = _easter(target_date.year)
+    if abs((target_date - e_this).days) <= easter_window:
+        return int((e_this - _easter(target_date.year - 1)).days)
+    return 364
+
+
 def build_frame(
     panel: Panel,
     origin: pd.Timestamp,
     horizon: int = HORIZON,
     with_target: bool = False,
     extra_target_lags: tuple = (),
+    yoy_easter_window: int | None = None,
 ) -> pd.DataFrame:
     """One (series x horizon) feature frame for a single origin.
 
@@ -347,6 +372,18 @@ def build_frame(
                 col[:, h - 1] = panel.values[:, src]
         frame[f"tlag_{k}"] = col.reshape(-1)
 
+
+    if yoy_easter_window is not None:
+        yoy = np.full((n_series, horizon), np.nan, dtype=np.float32)
+        for h in range(1, horizon + 1):
+            t = origin_pos + h - 1
+            target_date = pd.Timestamp(origin) + pd.Timedelta(days=h - 1)
+            src = t - _yoy_source_shift(target_date, yoy_easter_window)
+            assert src < origin_pos, "yoy anchor would read at or after the origin"
+            if src >= 0:
+                yoy[:, h - 1] = panel.values[:, src]
+        frame["tlag_yoy"] = yoy.reshape(-1)
+
     if with_target:
         end_pos = origin_pos + horizon
         if end_pos > panel.values.shape[1]:
@@ -391,10 +428,12 @@ def build_training_set(
     spacing_days: int = 7,
     horizon: int = HORIZON,
     extra_target_lags: tuple = (),
+    yoy_easter_window: int | None = None,
 ) -> pd.DataFrame:
     """Stack feature frames over simulated origins to form the training matrix."""
     origins = training_origins(panel, fold_origin, n_origins, spacing_days, horizon)
-    frames = [build_frame(panel, o, horizon, with_target=True, extra_target_lags=extra_target_lags) for o in origins]
+    frames = [build_frame(panel, o, horizon, with_target=True, extra_target_lags=extra_target_lags,
+                          yoy_easter_window=yoy_easter_window) for o in origins]
     out = pd.concat(frames, ignore_index=True)
     for col in CATEGORICAL_COLUMNS:
         out[col] = out[col].astype("category")
