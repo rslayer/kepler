@@ -1,4 +1,6 @@
 {
-  "label": "easter_anchor",
-  "yoy_easter_window": 21
+  "label": "leaves383",
+  "params": {
+    "num_leaves": 383
+  }
 }
