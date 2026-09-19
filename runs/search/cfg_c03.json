@@ -1,6 +1,7 @@
 {
-  "label": "min_child_50",
+  "label": "easter+leaves383",
+  "yoy_easter_window": 21,
   "params": {
-    "min_child_samples": 50
+    "num_leaves": 383
   }
 }
