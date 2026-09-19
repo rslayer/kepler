@@ -14,6 +14,7 @@ DATASET ?= m5_screen
 RUN ?=
 SEEDS ?= 42,7,123
 JOBS ?= 1
+FIT_JOBS ?=            # SPEC v9: fits in parallel; empty -> backtest default floor(vCPU/4)
 BAG ?= on
 PARENT ?=
 SESSION ?=
@@ -56,7 +57,7 @@ holdout:
 
 backtest:
 	@if [ -z "$(MODEL)" ]; then echo "usage: make backtest MODEL=<name>"; exit 2; fi
-	$(PY) python -m src.backtest --model $(MODEL) --dataset $(DATASET) --seeds $(SEEDS) --jobs $(JOBS) --bag-seeds $(BAG) --author $(AUTHOR) $(if $(PARENT),--parent $(PARENT),) $(if $(SESSION),--session $(SESSION),) $(if $(HYPOTHESIS),--hypothesis $(HYPOTHESIS),)
+	$(PY) python -m src.backtest --model $(MODEL) --dataset $(DATASET) --seeds $(SEEDS) $(if $(FIT_JOBS),--fit-jobs $(FIT_JOBS),) --bag-seeds $(BAG) --author $(AUTHOR) $(if $(PARENT),--parent $(PARENT),) $(if $(SESSION),--session $(SESSION),) $(if $(HYPOTHESIS),--hypothesis $(HYPOTHESIS),)
 
 report:
 ifeq ($(strip $(RUN)),)
