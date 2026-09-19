@@ -1,50 +1,42 @@
-# Compute for the confirmation tier (SPEC_v4 Part E)
+# kepler on a cloud box (SPEC v9 Part A)
 
-## Why
+Goal: one m5_all backtest in <=4 min (vs ~28 min serial on the laptop) by running the 24
+fold×seed fits in parallel and parallelizing the 12-level scorer. Parallel search, serial gate:
+**the holdout is never provisioned here and is never scored by any researcher or tool.**
 
-Measured on this laptop (Apple Silicon, 14 cores, 36 GB; `num_threads=4` per fit,
-`JOBS=3`, LightGBM 4.5):
-
-| dataset | series | model | fits | wall clock | notes |
-|---|---|---|---|---|---|
-| m5_ca1 | 3,049 | lgbm_baseline | 24 | 5.5 min sequential; ~5 min JOBS=2 (machine shared) | v1 baseline |
-| m5_ca1 | 3,049 | recipe (early-stopped, lr 0.05/1500) | 24 | 12–15 min, JOBS=3 | 25+ min when the machine is shared |
-| m5_3 | 9,147 | lgbm_baseline | 24 | (being measured) | hierarchical screen |
-| m5_all | 30,490 | seasonal_naive | 24 | 4.5 min | all of it is scoring |
-| m5_all | 30,490 | lgbm_baseline | 24 | 42 min alone; 60 min shared | hier 0.785 |
-| m5_all | 30,490 | recipe6_calendar_l2 | 96 (4 per fold x seed) | 95 min, JOBS=3 | hier 0.698 |
-
-One confirmation run per evening is the binding constraint on the loop, not ideas.
-
-## The one-box setup (to be tested by the human; no agent provisions cloud resources)
-
-Any Linux VM with 32 vCPU / 64 GB is enough; the fits are CPU-bound and the full
-dataset needs ~6 GB per worker process. Suggested: a spot/preemptible instance of that
-class (order of $1–2 per hour on the major clouds at the time of writing).
-
-```bash
-# on the box
-sudo apt-get install -y build-essential git   # Debian/Ubuntu
-curl -LsSf https://astral.sh/uv/install.sh | sh
-gh auth login && git clone https://github.com/rslayer/kepler && cd kepler
-make env                                       # no libomp step needed on Linux
-# data: either copy data/<dataset>/raw from the laptop (rsync) or place ~/.kaggle/access_token
-# on the box (mode 600) and run `make data DATASET=m5_all`; then `make holdout DATASET=m5_all`
-# (wide layout: writes the evaluation-period holdout, snapshot untouched)
-make backtest MODEL=lgbm_baseline DATASET=m5_all JOBS=8
+## 1. Launch (your credentials — the script only prints the template)
 ```
+tools/cloud/provision.sh launch     # prints an AWS spot run-instances template; edit + run yourself
+```
+Pick the cheapest >=64 vCPU / >=128 GB spot box you have credentials for. Defaults: `c7i.16xlarge`
+(64 vCPU / 128 GB), Ubuntu 22.04. `r7i.16xlarge` if a fit turns out memory-bound.
 
-Expected with `JOBS=8` and `num_threads=4`: `m5_all` `lgbm_baseline` in roughly 15 minutes,
-the recipe in roughly 30, i.e. 3–4 confirmation runs per researcher session instead of one.
-Results are identical to the laptop's for the same seeds (determinism verified for JOBS
-1 vs 2 on m5_ca1; LightGBM's `deterministic=True, force_row_wise=True` with a fixed thread
-count) — re-verify once on the box with `make backtest MODEL=lgbm_baseline DATASET=m5_ca1`
-against r033 (0.810828, config 900159c6f3dd) before trusting cross-machine comparisons.
+## 2. Set up the box
+```
+scp ~/.kaggle/kaggle.json ubuntu@BOX:~/.kaggle/kaggle.json   # chmod 600 on the box
+ssh ubuntu@BOX
+./tools/cloud/provision.sh setup <commit>     # installs uv env, clones repo at <commit>
+./tools/cloud/provision.sh pull-data          # rebuilds m5_all + m5_screen snapshots from Kaggle
+```
+`pull-data` writes only under `data/<id>/snapshot/`. It never creates or copies `holdout/`.
 
-Headless cycles on the box need `claude login` once (the CLI's own OAuth), then
-`tools/cycle.sh m5_3 3` (screen) with confirmations on `m5_all` following automatically
-(CLAUDE.md step 7a). Fill in the measured column of the table above after the first run.
+## 3. Run a parallel backtest
+```
+make backtest MODEL=recipe6_calendar_l2 DATASET=m5_all FIT_JOBS=$(( $(nproc) / 4 ))
+```
+`--fit-jobs N` (Makefile `FIT_JOBS=`) runs N fits concurrently, each with 4 threads; default is
+`floor(vCPU/4)`. A per-fold feature cache builds the feature matrix once and shares it across the
+3 seeds. The 12-level scorer runs its level aggregations concurrently (arithmetic unchanged;
+verified identical to six decimals).
 
-## What is deliberately not automated
-Provisioning, credentials (Kaggle token, GitHub, Claude login), and the yardstick
-(`make score-holdout MODEL=<m> DATASET=m5_all`, one shot per model, ever) stay human.
+## 4. Determinism
+`--fit-jobs` changes only scheduling: each (fold, seed) fit is independent and seeded, so results
+match the serial run to six decimals. Verify with `tools/cloud/verify_identical.py <serial_run> <parallel_run>`.
+
+## 5. Benchmark
+See `BENCHMARK.md`. Fill its v9 section with measured numbers from THIS box (serial vs
+`--fit-jobs max`, wall-clock, spot $/run, projected 200-run cycle cost).
+
+## What is deliberately absent
+- No `holdout/` on the box. The gate is human-run on the laptop only.
+- No scorer-arithmetic changes. Only the *invocation* is parallelized.
