@@ -1,0 +1,3 @@
+# SPEC v9 Part C — nightly kepler cycle on the cloud box (2am). Researchers -> adversary -> gate.
+# Install: crontab tools/cloud/crontab.example   (edit the repo path first)
+0 2 * * *  cd $HOME/kepler && KEPLER_MANDATES=A,B,C KEPLER_HOURS=4 tools/cloud/nightly.sh >> runs/nightly.log 2>&1
