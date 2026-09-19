@@ -1,0 +1,10 @@
+{
+  "hypothesis": "H169",
+  "note": "Batch 2: capacity ceiling. num_leaves 383/511, alone and stacked with the Easter anchor. Spring-gated on the v9 proxy; deeper trees that overfit will hurt spring and fail the gate. Holdout untouched.",
+  "configs": [
+    {"label": "leaves383", "params": {"num_leaves": 383}},
+    {"label": "leaves511", "params": {"num_leaves": 511}},
+    {"label": "easter+leaves383", "yoy_easter_window": 21, "params": {"num_leaves": 383}},
+    {"label": "easter+leaves511", "yoy_easter_window": 21, "params": {"num_leaves": 511}}
+  ]
+}
