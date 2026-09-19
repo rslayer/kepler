@@ -62,6 +62,19 @@ promising unexplored hypothesis.
 
 <!-- RULES: human-owned. Agents never edit above this line. -->
 <!-- PRIORS: curator-editable below this line. -->
+
+## Session protocol (SPEC v9 Part B — the ledger is the loop's memory)
+Every researcher session, before running anything:
+1. Read `hypotheses/LEDGER_RULES.md`, the consolidated ledger `hypotheses/m5_all/ledger.csv`,
+   the champion row, and the calm-month diagnostic (`make report RUN=<champion> --by month`).
+2. Write your chosen hypothesis as a `pending` row in the ledger (id, lever, summary, mechanism)
+   BEFORE the first backtest. Run `tools/ledger_check.py --hypothesis <id> [--mandate <m>]`; it
+   fails if the row is missing, is a dead re-run (same lever+mechanism as a non-reopened
+   discarded/held row), or is outside your mandate's lever.
+3. At session end, write the verdict and one-line mechanism into the row.
+Dead ends (notably the recursive/compounding-bias family H161/H161a-c/H163) stay blocked until a
+human sets the row's status to `reopen` with a reason. The holdout is never scored by a researcher.
+
 Priors and domain notes are per dataset: read datasets/<DATASET>/PRIORS.md, where
 DATASET is the dataset you were told to work on (default m5_screen, the hierarchical screen: all 10 stores, 1/3 items). The curator rewrites
 that file; this file's block below the marker holds only harness notes.
