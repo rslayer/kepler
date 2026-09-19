@@ -52,6 +52,20 @@ FEATURE_COLUMNS: list[str] = []
 PARTITION_COLUMN: str | None = None  # v5 Part C: roles["partition"], the series attribute per-partition models split on
 _BOUND: str | None = None
 
+# --- SPEC v9 Part A: per-fold feature cache. When enabled (parallel path only), build_frame and
+# build_training_set memoize their result per (origin, args) so the 3 seeds of one fold reuse the
+# feature matrix instead of rebuilding it 3x. Off by default -> the serial path is byte-identical.
+# Cleared between folds so memory holds only one fold's frames. Seed-independent by construction
+# (features never read the seed), so results are identical to six decimals (verified vs a serial run).
+_FEATURE_CACHE: dict = {}
+_FEATURE_CACHE_ON: list = [False]
+
+
+def set_feature_cache(on: bool) -> None:
+    _FEATURE_CACHE_ON[0] = bool(on)
+    if not on:
+        _FEATURE_CACHE.clear()
+
 
 def _feature_columns(flags: list[str], price: str, categoricals: list[str]) -> list[str]:
     return [
@@ -303,6 +317,11 @@ def build_frame(
     `origin` is the first forecast date. If `with_target`, the actual target for the
     window is attached as `y`; only valid when the window lies inside the snapshot.
     """
+    if _FEATURE_CACHE_ON[0]:
+        _k = ("frame", str(origin), horizon, with_target, tuple(extra_target_lags), yoy_easter_window)
+        _hit = _FEATURE_CACHE.get(_k)
+        if _hit is not None:
+            return _hit
     origin_pos = panel.pos(origin)
     n_series = panel.values.shape[0]
     dates = pd.DatetimeIndex([pd.Timestamp(origin) + pd.Timedelta(days=h) for h in range(horizon)])
@@ -392,6 +411,8 @@ def build_frame(
 
     for col in CATEGORICAL_COLUMNS:
         frame[col] = frame[col].astype("category")
+    if _FEATURE_CACHE_ON[0]:
+        _FEATURE_CACHE[("frame", str(origin), horizon, with_target, tuple(extra_target_lags), yoy_easter_window)] = frame
     return frame
 
 
@@ -431,10 +452,17 @@ def build_training_set(
     yoy_easter_window: int | None = None,
 ) -> pd.DataFrame:
     """Stack feature frames over simulated origins to form the training matrix."""
+    if _FEATURE_CACHE_ON[0]:
+        _kt = ("train", str(fold_origin), n_origins, spacing_days, horizon, tuple(extra_target_lags), yoy_easter_window)
+        _hitt = _FEATURE_CACHE.get(_kt)
+        if _hitt is not None:
+            return _hitt
     origins = training_origins(panel, fold_origin, n_origins, spacing_days, horizon)
     frames = [build_frame(panel, o, horizon, with_target=True, extra_target_lags=extra_target_lags,
                           yoy_easter_window=yoy_easter_window) for o in origins]
     out = pd.concat(frames, ignore_index=True)
     for col in CATEGORICAL_COLUMNS:
         out[col] = out[col].astype("category")
+    if _FEATURE_CACHE_ON[0]:
+        _FEATURE_CACHE[("train", str(fold_origin), n_origins, spacing_days, horizon, tuple(extra_target_lags), yoy_easter_window)] = out
     return out

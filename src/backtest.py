@@ -259,10 +259,21 @@ def _worker_init(dataset_id: str, model_name: str) -> None:
     _W["model"] = get_model(model_name)
 
 
-def _worker_fit(task: tuple) -> tuple:
-    origin, horizon, seed = task
-    pred = _W["model"].forecast(_W["panel"], pd.Timestamp(origin), horizon, seed)
-    return (str(origin), seed, pred)
+def _worker_fit_origin(task: tuple) -> list:
+    """Fit all seeds for ONE origin, building the feature matrix once (feature cache on) and
+    reusing it across seeds. Returns [(origin_str, seed, pred), ...]. Seed-independent features,
+    so identical to the serial path to six decimals; the cache only removes redundant rebuilds."""
+    from .features import set_feature_cache
+    origin, horizon, seeds = task
+    out = []
+    set_feature_cache(True)
+    try:
+        for seed in seeds:
+            pred = _W["model"].forecast(_W["panel"], pd.Timestamp(origin), horizon, seed)
+            out.append((str(origin), seed, pred))
+    finally:
+        set_feature_cache(False)  # clears the cache -> only one fold's frames held at a time
+    return out
 
 
 def parallel_forecasts(dataset_id: str, model_name: str, origins: list, seeds: tuple, horizon: int,
@@ -272,7 +283,7 @@ def parallel_forecasts(dataset_id: str, model_name: str, origins: list, seeds: t
     (origin, seed) pairs and marks the run timeout, as the sequential path would."""
     import concurrent.futures as cf
     import multiprocessing as mp
-    tasks = [(str(o), horizon, sd) for o in origins for sd in seeds]
+    tasks = [(str(o), horizon, tuple(seeds)) for o in origins]  # one task per fold; seeds share features
     out = {}
     t0 = time.time()
     ctx = mp.get_context("spawn")
@@ -282,16 +293,16 @@ def parallel_forecasts(dataset_id: str, model_name: str, origins: list, seeds: t
         it = iter(tasks)
         for _ in range(jobs):
             t = next(it, None)
-            if t: pending[ex.submit(_worker_fit, t)] = t
+            if t: pending[ex.submit(_worker_fit_origin, t)] = t
         while pending:
             done, _ = cf.wait(list(pending), return_when=cf.FIRST_COMPLETED)
             for fut in done:
                 pending.pop(fut)
-                o, sd, pred = fut.result()
-                out[(o, sd)] = pred
+                for o, sd, pred in fut.result():
+                    out[(o, sd)] = pred
                 if budget_seconds is None or time.time() - t0 < budget_seconds:
                     t = next(it, None)
-                    if t: pending[ex.submit(_worker_fit, t)] = t
+                    if t: pending[ex.submit(_worker_fit_origin, t)] = t
     return out
 
 
@@ -577,7 +588,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--session", default="", help="<role>-<YYYYMMDD>-<n>; required for researcher runs")
     parser.add_argument("--hypothesis", default="", help="H### from hypotheses/ledger.csv; required for researcher runs")
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
-    parser.add_argument("--jobs", type=int, default=1, help="worker processes for the (fold, seed) fits")
+    import os as _os
+    _default_fit_jobs = max(1, (_os.cpu_count() or 4) // 4)
+    parser.add_argument("--fit-jobs", type=int, default=None,
+                        help=f"worker processes for the per-fold fits (each keeps 4 threads); default floor(vCPU/4)={_default_fit_jobs}")
+    parser.add_argument("--jobs", type=int, default=None, help="alias for --fit-jobs (kept for back-compat)")
     parser.add_argument("--bag-seeds", choices=["on", "off"], default="on" if BAG_SEEDS_DEFAULT else "off",
                         help="on (default): headline metrics score the seed-averaged forecast; off reproduces v1-v4 runs")
     args = parser.parse_args(argv)
@@ -603,8 +618,12 @@ def main(argv: list[str] | None = None) -> int:
         seeds = tuple(int(x) for x in args.seeds.split(",") if x.strip())
         if not seeds:
             raise SystemExit("--seeds must name at least one seed")
+        # resolve fit-jobs: --fit-jobs wins, then --jobs alias, then floor(vCPU/4) default
+        _fj = args.fit_jobs if args.fit_jobs is not None else (args.jobs if args.jobs is not None else _default_fit_jobs)
+        _resolved_fit_jobs = max(1, _fj)
+        print(f"fit-jobs={_resolved_fit_jobs} (vCPU={_os.cpu_count()})")
         run_backtest(args.model, seeds, args.author, args.folds, args.parent or None,
-                     args.session, args.hypothesis, args.dataset, max(1, args.jobs), args.bag_seeds == "on")
+                     args.session, args.hypothesis, args.dataset, _resolved_fit_jobs, args.bag_seeds == "on")
     except SystemExit:
         raise
     except Exception as exc:  # log the failure rather than losing it
