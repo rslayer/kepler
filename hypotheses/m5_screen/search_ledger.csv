@@ -3,3 +3,4 @@ cycle,run_id,label,agg_hier,agg_gain,spring_gain,keep_verdict,spring_gate,config
 2,r138,leaves255,0.680163,+0.009175,+0.017375,kept,PASS,"{""label"": ""leaves255"", ""params"": {""num_leaves"": 255}}"
 3,r139,min_child_50,0.696552,-0.007214,-0.010083,discarded,FAIL,"{""label"": ""min_child_50"", ""params"": {""min_child_samples"": 50}}"
 4,r140,easter+leaves255,0.674065,+0.015273,+0.025209,discarded,PASS,"{""label"": ""easter+leaves255"", ""yoy_easter_window"": 21, ""params"": {""num_leaves"": 255}}"
+1,r141,leaves383,0.674945,+0.014392,+0.022006,kept,PASS,"{""label"": ""leaves383"", ""params"": {""num_leaves"": 383}}"
