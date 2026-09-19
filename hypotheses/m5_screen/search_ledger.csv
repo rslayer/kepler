@@ -6,3 +6,4 @@ cycle,run_id,label,agg_hier,agg_gain,spring_gain,keep_verdict,spring_gate,config
 1,r141,leaves383,0.674945,+0.014392,+0.022006,kept,PASS,"{""label"": ""leaves383"", ""params"": {""num_leaves"": 383}}"
 2,r142,leaves511,0.671739,+0.017599,+0.032104,kept,PASS,"{""label"": ""leaves511"", ""params"": {""num_leaves"": 511}}"
 3,r143,easter+leaves383,0.670919,+0.018419,+0.026823,kept,PASS,"{""label"": ""easter+leaves383"", ""yoy_easter_window"": 21, ""params"": {""num_leaves"": 383}}"
+4,r144,easter+leaves511,0.668344,+0.020993,+0.030588,kept,PASS,"{""label"": ""easter+leaves511"", ""yoy_easter_window"": 21, ""params"": {""num_leaves"": 511}}"
