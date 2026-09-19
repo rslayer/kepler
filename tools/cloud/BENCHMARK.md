@@ -66,3 +66,44 @@ The binding constraint is wall clock, not dollars: one machine does ~2 m5_all ru
 a 200-run cycle is days of continuous compute. Parallelising across several boxes (or using
 the cheaper m5_3 screen for most runs and reserving m5_all for confirmations) is the lever,
 not more workers per box.
+
+---
+
+## v9 — fit-jobs + per-fold feature cache (2026-09-19)
+
+SPEC v9 Part A added `--fit-jobs N` (per-fold fits in N processes, each 4 threads; default
+`floor(vCPU/4)`) and a per-fold feature cache (build the feature matrix once, share across the
+3 seeds). **Correctness first:** parallel output is **bit-identical** to the serial run —
+recipe6_calendar_l2 on m5_screen, serial r134 vs parallel(fit-jobs=4) r148, `wrmsse_hier`
+diff = 0.00e+00 (all 8 folds exact), not merely to six decimals.
+
+### Measured — laptop (14 vCPU / 10 perf cores), m5_screen, recipe6_calendar_l2, bagged 3 seeds
+| config | wall clock | speedup |
+|---|---|---|
+| serial (r134, jobs=1) | 3041.8 s (50.7 min) | 1.00x |
+| fit-jobs=4 + feature cache (r148) | 1539.3 s (25.7 min) | **1.98x** |
+
+The laptop caps here: fit-jobs=4 x 4 threads = 16 threads on 14 cores (slight oversubscription),
+and the 12-level scorer is still serial. The feature cache is what pushes past the ~1.58x the
+laptop reached before (it removes 2 of every 3 feature builds per fold).
+
+### Cloud (PENDING a human run — this environment has no >=64 vCPU box)
+Provision with `tools/cloud/provision.sh`, then on the box:
+```
+make backtest MODEL=recipe6_calendar_l2 DATASET=m5_all   FIT_JOBS=$(( $(nproc)/4 ))   # ~16 on 64 vCPU
+make backtest MODEL=recipe6_calendar_l2 DATASET=m5_screen FIT_JOBS=$(( $(nproc)/4 ))
+```
+Fill in the measured wall-clock below (targets from the spec: m5_all <= 4 min, m5_screen <= 90 s):
+| config | box | wall clock | speedup | $/run (spot) |
+|---|---|---|---|---|
+| m5_all serial | | | 1.00x | |
+| m5_all fit-jobs=16 | | **<TBD>** | | |
+| m5_screen fit-jobs=16 | | **<TBD>** | | |
+
+Projected 200-run m5_all cycle at the target 4 min/run: ~13 h wall clock (vs ~94 h on the laptop).
+
+### Deferred: parallel scorer
+The 12-level WRMSSE is computed inside a single call in the FROZEN `src/scorer_hier.py`
+(`score_window_hier`), which does not expose a per-level primitive. Parallelising the levels
+would require editing frozen arithmetic, so it is deferred; the fits dominate m5_all wall-time
+(the scorer is a small serial tail), so the impact on the <=4 min target is minor.
