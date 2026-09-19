@@ -76,7 +76,7 @@ score-holdout:
 # v5-parta (2026-09-14) supersedes the stale v4-partc: score_holdout.py's wrmsse_hier
 # yardstick column, the evaluation-label quarantine in adapters/m5.py, and backtest.py's
 # --reparent path, per-dataset budgets and v5 seed bagging are all in the baseline now.
-FROZEN_REF ?= v9-yearround
+FROZEN_REF ?= v9-cloud
 
 # Every file whose contents the harness's integrity depends on. This must include not
 # just the scorer but everything that FEEDS it: the fold logic + keep rule (backtest),
