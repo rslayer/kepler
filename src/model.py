@@ -782,6 +782,36 @@ class LGBMRecipeCalib(LGBMRecipeBag3):
 
 from .recursive import RecursiveForecaster as _RecursiveForecaster, RecursiveForecasterTweedie as _RecursiveForecasterTweedie, RecursiveForecasterLog as _RecursiveForecasterLog, RecursiveForecasterSqrt as _RecursiveForecasterSqrt, RecursiveForecasterDebiased as _RecursiveForecasterDebiased
 
+class LGBMDirectMH(LGBMRecipe6CalendarL2):
+    """SPEC v9 Part D (Researcher A, lever=horizon): multi-horizon direct models with a variable
+    bucket count. The champion is already 4-bucket direct (WEEKS weekly); this makes bucket count
+    the one experimental variable. Each bucket fits its own model on that horizon range's rows,
+    using only target-relative lags valid for it (the k>=h NaN rule -> a bucket starting at horizon
+    h sees lags >= h). No recursion, so no compounding bias. N_BUCKETS splits 1..28 into even
+    contiguous ranges: 4 == champion (sanity), 7 (4-day), 28 (per-day)."""
+
+    name = "lgbm_direct_mh"
+    N_BUCKETS = 4
+
+    @property
+    def WEEKS(self):
+        import math
+        n = max(1, min(self.N_BUCKETS, HORIZON))
+        size = math.ceil(HORIZON / n)
+        return tuple((i + 1, min(i + size, HORIZON)) for i in range(0, HORIZON, size))
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "n_buckets": self.N_BUCKETS, "buckets": [list(w) for w in self.WEEKS]}
+
+
+class LGBMDirectMH7(LGBMDirectMH):
+    name = "lgbm_direct_mh7"; N_BUCKETS = 7
+
+
+class LGBMDirectMH28(LGBMDirectMH):
+    name = "lgbm_direct_mh28"; N_BUCKETS = 28
+
+
 MODELS: dict[str, type] = {
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
@@ -801,6 +831,9 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
     LGBMRecipe6CalendarL2YoYEHist3y.name: LGBMRecipe6CalendarL2YoYEHist3y,
     LGBMRecipeSearch.name: LGBMRecipeSearch,
+    LGBMDirectMH.name: LGBMDirectMH,
+    LGBMDirectMH7.name: LGBMDirectMH7,
+    LGBMDirectMH28.name: LGBMDirectMH28,
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
     LGBMRecipeReconciled.name: LGBMRecipeReconciled,
