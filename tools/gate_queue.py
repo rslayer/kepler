@@ -26,7 +26,9 @@ def main():
     kept = [r for r in m5all if r.get("verdict") == "kept"]
     # adversary verdicts live in runs.csv author=adversary rows or a verdict marker; treat
     # verdict=="adversary_pass" or an adversary review row as cleared. (None yet -> awaiting.)
-    adv = {r["run_id"]: r.get("verdict") for r in rs if r.get("author") == "adversary"}
+    # adversary rows record the REVIEWED run in model_name; status ok = PASS, rejected = FAIL/INCONCLUSIVE
+    adv = {r["model_name"]: ("PASS" if r.get("status") == "ok" else "FAIL")
+           for r in rs if r.get("author") == "adversary"}
 
     cand = []
     for r in kept:
