@@ -46,6 +46,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hypothesis"); ap.add_argument("--propose", action="store_true")
     ap.add_argument("--lever"); ap.add_argument("--mechanism"); ap.add_argument("--mandate")
+    ap.add_argument("--dry", action="store_true", help="integrity check of the ledger")
     a = ap.parse_args()
     rows = _rows()
     by_id = {r["hypothesis_id"]: r for r in rows}
