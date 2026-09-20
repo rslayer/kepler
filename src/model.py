@@ -613,6 +613,29 @@ class LGBMRecipeReconciled(LGBMRecipe6CalendarL2):
         return rec.reconcile(bottom, agg, panel, self.RECON_LEVEL, tuple(self.RECON_CLIP))
 
 
+class LGBMRecipeReconciledShrink(LGBMRecipeReconciled):
+    """Researcher B (lever=hierarchy) tuning of the discarded full reconciliation (H159). H159
+    failed on m5_all because the light aggregate model cannot beat a 30490-series bottom-up, so
+    matching it exactly ('every level worse') hurt. This scales the bottom forecasts only PARTWAY
+    toward the aggregate (geometric shrink factor**RECON_SHRINK), so a wrong aggregate does less
+    damage while a right one still corrects the bias. New mechanism (partial reconciliation), not a
+    re-run of H159's full reconciliation."""
+
+    name = "recipe6_reconciled_shrink"
+    RECON_SHRINK = 0.4
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "reconcile_shrink": self.RECON_SHRINK}
+
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        from . import reconcile as rec
+        bottom = super(LGBMRecipeReconciled, self).forecast(panel, origin, horizon, seed)
+        if self.GATE_MAJOR_EVENT and rec.window_has_major_event(panel, origin, horizon):
+            return bottom
+        agg = rec.aggregate_forecast(panel, self.RECON_LEVEL, origin, horizon, seed)
+        return rec.reconcile(bottom, agg, panel, self.RECON_LEVEL, tuple(self.RECON_CLIP), shrink=self.RECON_SHRINK)
+
+
 class LGBMRecipe6CalendarL2Slow(LGBMRecipe6CalendarL2):
     """Research lever (close the leaderboard gap): restore the spec learning schedule — a
     slower learning rate (0.02) with a higher tree cap (3000), early-stopped — from the
@@ -837,6 +860,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2Corr.name: LGBMRecipe6CalendarL2Corr,
     LGBMRecipe6CalendarL2Slow.name: LGBMRecipe6CalendarL2Slow,
     LGBMRecipeReconciled.name: LGBMRecipeReconciled,
+    LGBMRecipeReconciledShrink.name: LGBMRecipeReconciledShrink,
     LGBMRecipe6CalendarL2Tweedie.name: LGBMRecipe6CalendarL2Tweedie,
     LGBMRecipeEnsembleObj.name: LGBMRecipeEnsembleObj,
     LGBMRecipeEnsembleRD.name: LGBMRecipeEnsembleRD,
