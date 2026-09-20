@@ -891,7 +891,57 @@ class LGBMDirectMH28(LGBMDirectMH):
     name = "lgbm_direct_mh28"; N_BUCKETS = 28
 
 
+class FMChronosBolt:
+    """SPEC v10 Part B (Researcher C mandate): a zero-shot time-series FOUNDATION MODEL — a
+    genuinely different family from the LightGBM champion, for cross-family ensemble diversity.
+    Amazon Chronos-Bolt-small, run on CPU. Zero-shot: each series' own history strictly before the
+    origin is the only context; no fine-tuning, no M5 in the weights. Leak-free by construction
+    (reads panel.values[:, :origin_pos] only). Produces the same per-series, per-horizon point
+    forecast (the 0.5-quantile mean) the scorer expects."""
+
+    name = "fm_chronos_bolt"
+    REPO = "amazon/chronos-bolt-small"
+    CTX = 512   # days of history fed as context (weekly+annual seasonality within ~1.4 years)
+    _pipe = None
+
+    def config(self) -> dict:
+        return {"kind": "foundation_model", "model": self.REPO, "zero_shot": True,
+                "context_days": self.CTX, "horizon": HORIZON}
+
+    def _pipeline(self):
+        if FMChronosBolt._pipe is None:
+            try:
+                import truststore; truststore.inject_into_ssl()
+            except Exception:
+                pass
+            import torch
+            from chronos import BaseChronosPipeline
+            torch.set_num_threads(4)
+            FMChronosBolt._pipe = BaseChronosPipeline.from_pretrained(
+                self.REPO, device_map="cpu", torch_dtype=torch.float32)
+        return FMChronosBolt._pipe
+
+    def forecast(self, panel: Panel, origin: pd.Timestamp, horizon: int = HORIZON, seed: int = 42) -> pd.DataFrame:
+        import torch
+        pipe = self._pipeline()
+        o = panel.pos(origin)
+        vals = panel.values  # (n_series, n_days)
+        lo = max(0, o - self.CTX)
+        contexts = [torch.tensor(vals[i, lo:o].astype("float32")) for i in range(len(panel.ids))]
+        out = np.empty((len(panel.ids), horizon), dtype=np.float64)
+        B = 512
+        for st in range(0, len(contexts), B):
+            _, mean = pipe.predict_quantiles(contexts[st:st + B], horizon, [0.5])
+            out[st:st + B] = mean.numpy()
+        out = np.clip(out, 0.0, None)
+        dates = pd.DatetimeIndex([pd.Timestamp(origin) + pd.Timedelta(days=h) for h in range(horizon)])
+        return pd.DataFrame({"id": np.repeat(panel.ids, horizon),
+                             "date": np.tile(dates.to_numpy(), len(panel.ids)),
+                             "forecast": out.reshape(-1)})
+
+
 MODELS: dict[str, type] = {
+    FMChronosBolt.name: FMChronosBolt,
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
     LGBMChristmasZero.name: LGBMChristmasZero,
