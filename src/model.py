@@ -940,8 +940,55 @@ class FMChronosBolt:
                              "forecast": out.reshape(-1)})
 
 
+class FMBlendEqual(LGBMRecipe6CalendarL2Cap511):
+    """Part B Blend 1: equal-weight item-level mean of the champion (cap511) and the zero-shot FM."""
+    name = "fm_blend_equal"
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        champ = super().forecast(panel, origin, horizon, seed)
+        fm = FMChronosBolt().forecast(panel, origin, horizon, seed)
+        m = champ.merge(fm, on=["id", "date"], suffixes=("_c", "_f"))
+        m["forecast"] = 0.5 * m["forecast_c"] + 0.5 * m["forecast_f"]
+        return m[["id", "date", "forecast"]]
+    def extra_config(self): return {**super().extra_config(), "blend": ["cap511", "fm_chronos_bolt"], "weights": "equal"}
+
+
+class FMBlendVfit(LGBMRecipe6CalendarL2Cap511):
+    """Part B Blend 2: champion + FM blended with a weight FIT on the pre-origin validation window
+    (leak-free closed form, clipped [0,1]). Per the spec's 'weights fit on training folds'. A
+    per-level weight is moot when the FM is uniformly worse (the fit drives w toward the champion);
+    reported as such if so."""
+    name = "fm_blend_vfit"
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        champ = super().forecast(panel, origin, horizon, seed)
+        fm = FMChronosBolt().forecast(panel, origin, horizon, seed)
+        w = 1.0
+        vs = pd.Timestamp(origin) - pd.Timedelta(days=horizon)
+        try:
+            vc = super().forecast(panel, vs, horizon, seed)
+            vf = FMChronosBolt().forecast(panel, vs, horizon, seed)
+            o = panel.pos(vs)
+            actual = {(panel.ids[i], panel.dates[o + h]): panel.values[i, o + h]
+                      for i in range(len(panel.ids)) for h in range(horizon) if o + h < panel.values.shape[1]}
+            va = vc.merge(vf, on=["id", "date"], suffixes=("_c", "_f"))
+            va["y"] = [actual.get((i, d), np.nan) for i, d in zip(va["id"], va["date"])]
+            va = va.dropna(subset=["y"])
+            c = va["forecast_c"].to_numpy(); f = va["forecast_f"].to_numpy(); y = va["y"].to_numpy()
+            denom = float(((c - f) ** 2).sum())
+            if denom > 1e-9:
+                w = float(np.clip(((y - f) * (c - f)).sum() / denom, 0.0, 1.0))
+        except Exception:
+            w = 1.0
+        self._w = w
+        m = champ.merge(fm, on=["id", "date"], suffixes=("_c", "_f"))
+        m["forecast"] = w * m["forecast_c"] + (1.0 - w) * m["forecast_f"]
+        return m[["id", "date", "forecast"]]
+    def extra_config(self): return {**super().extra_config(), "blend": ["cap511", "fm_chronos_bolt"], "weights": "validation_fit"}
+
+
 MODELS: dict[str, type] = {
     FMChronosBolt.name: FMChronosBolt,
+    FMBlendEqual.name: FMBlendEqual,
+    FMBlendVfit.name: FMBlendVfit,
     SeasonalNaive.name: SeasonalNaive,
     LGBMBaseline.name: LGBMBaseline,
     LGBMChristmasZero.name: LGBMChristmasZero,
