@@ -566,6 +566,51 @@ class LGBMRecipeEnsembleObj(LGBMRecipe6CalendarL2):
         return m[["id", "date", "forecast"]]
 
 
+class LGBMRecipeEnsembleStack(LGBMRecipe6CalendarL2):
+    """Researcher C (lever=ensemble): fold-robust stacking of the recipe (regression) and Tweedie,
+    with the blend weight FIT on the validation window (the 28 days before the origin) rather than
+    fixed at 0.5/0.5 (the discarded H160). Leak-free: members are forecast at origin-28 (all inputs
+    strictly pre-origin), the weight minimises squared error against the known validation actuals
+    (closed form, clipped [0,1]), then applied to the horizon blend. No recursion. New mechanism
+    (validation-fit weight), not H160's equal mean."""
+
+    name = "recipe_ens_stack"
+
+    def _members(self, panel, origin, horizon, seed):
+        reg = super().forecast(panel, origin, horizon, seed)
+        tw = LGBMRecipe6CalendarL2Tweedie().forecast(panel, origin, horizon, seed)
+        return reg, tw
+
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        # horizon forecasts
+        reg, tw = self._members(panel, origin, horizon, seed)
+        # validation window: forecast the 28 days BEFORE the origin (leak-free) and fit the weight
+        vorigin = pd.Timestamp(origin) - pd.Timedelta(days=horizon)
+        w = 0.5
+        try:
+            vreg, vtw = self._members(panel, vorigin, horizon, seed)
+            va = vreg.merge(vtw, on=["id", "date"], suffixes=("_r", "_t"))
+            o = panel.pos(vorigin)
+            actual = {(panel.ids[i], panel.dates[o + h]): panel.values[i, o + h]
+                      for i in range(len(panel.ids)) for h in range(horizon) if o + h < panel.values.shape[1]}
+            va["y"] = [actual.get((i, d), np.nan) for i, d in zip(va["id"], va["date"])]
+            va = va.dropna(subset=["y"])
+            r = va["forecast_r"].to_numpy(); t = va["forecast_t"].to_numpy(); y = va["y"].to_numpy()
+            denom = float(((r - t) ** 2).sum())
+            if denom > 1e-9:
+                w = float(np.clip(((y - t) * (r - t)).sum() / denom, 0.0, 1.0))
+        except Exception:
+            w = 0.5  # fall back to equal weight if the validation window is unavailable
+        self._last_w = w
+        m = reg.merge(tw, on=["id", "date"], suffixes=("_r", "_t"))
+        m["forecast"] = w * m["forecast_r"] + (1.0 - w) * m["forecast_t"]
+        return m[["id", "date", "forecast"]]
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "ensemble": ["recipe6_calendar_l2", "recipe6_l2_tweedie"],
+                "stack": "validation_window_weight"}
+
+
 class LGBMRecipeEnsembleRD(LGBMRecipe6CalendarL2):
     """Recursive + direct ensemble (the M5 winners' core blend): the mean of the direct
     multi-horizon recipe (recipe6_calendar_l2) and the recursive 1-step model
@@ -863,6 +908,7 @@ MODELS: dict[str, type] = {
     LGBMRecipeReconciledShrink.name: LGBMRecipeReconciledShrink,
     LGBMRecipe6CalendarL2Tweedie.name: LGBMRecipe6CalendarL2Tweedie,
     LGBMRecipeEnsembleObj.name: LGBMRecipeEnsembleObj,
+    LGBMRecipeEnsembleStack.name: LGBMRecipeEnsembleStack,
     LGBMRecipeEnsembleRD.name: LGBMRecipeEnsembleRD,
     _RecursiveForecaster.name: _RecursiveForecaster,
     _RecursiveForecasterTweedie.name: _RecursiveForecasterTweedie,
