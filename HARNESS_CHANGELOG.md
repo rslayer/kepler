@@ -1,5 +1,40 @@
 # Harness changelog
 
+## v10 Part A — season-aware keep rule — 2026-09-20 (tag `v10-season`) — ACCEPTANCE FAILED, STOPPED
+
+SPEC v10 Part A adds a season-weighted keep rule: `season_tag` per fold (winter_holiday|winter|
+spring|summer|autumn) from the forecast window, in the detail JSON; `--fold-weights season_match`
+up-weights spring folds (2.0, matching the spring holdout), winter_holiday 0.5, else 1.0; the sign
+test and median guard run on weighted per-fold deltas (spring fold = 4 votes, adjacent 2,
+winter_holiday 1). **Default stays unweighted -> every historical verdict reproduces byte-for-byte**
+(verified: r147 kept unweighted); season_match is opt-in and logged in the detail.
+
+**Backfill (re-evaluated from detail, no re-runs):**
+- r147 (capacity, holdout WINNER 0.622): unweighted kept -> season_match **kept** (sign_p 0.001). Correct.
+- r132 (YoY anchor): discarded -> season_match **discarded** (weighted median goes negative). The rule
+  does discriminate.
+- **r131 (debiased ensemble m5_all — the backtest WINNER that LOST the holdout, 0.644): unweighted
+  kept -> season_match STILL KEPT (sign_p 0.000).** THE RULE DOES NOT CATCH THE MIRAGE.
+
+(Note: SPEC v10 names r132 as the ensemble; that is a mislabel — r132 is the YoY anchor, the debiased
+ensemble is r130 screen / r131 m5_all. The acceptance test — catch the backtest-winner/holdout-loser —
+is answered by r131, and it FAILS.)
+
+**Why season weighting cannot catch it.** r131's ensemble gain is positive on EVERY fold, including all
+three spring folds (Feb29 +0.007, Mar14 +0.006, Mar28 +0.024). The mirage is not a winter-specialist
+that loses the backtest's spring folds — it is a model uniformly better across the whole backtest
+(Dec-Apr) that fails only on the TRUE holdout window (d_1914-1941 = Apr25-May22). **No backtest fold
+reaches late-April/May** (the latest fold forecasts to Apr24), so a MAY-specific generalisation failure
+is invisible to any fold-reweighting scheme. Season weighting catches sign-disagreement between winter
+and spring folds; it cannot catch magnitude shrinkage in a window no fold covers.
+
+**Per the spec's own acceptance ("if the mirage still passes, stop; do not proceed to Parts B and C on a
+rule that cannot distinguish a transferable gain from a winter-specialist"), execution STOPPED after
+Part A.** The season-tagging infrastructure is kept (default-safe, and it does correctly discard r132),
+but season_match is NOT a sufficient fix for the 5:1 shrinkage. The real fix would need a validation
+window at the holdout's actual dates (a fold that forecasts May), which the current 8-fold layout ending
+at the snapshot cannot provide without extending the snapshot — a data/harness change beyond Part A.
+
 ## v9 — year-round backtest folds — 2026-09-18 (tag `v9-yearround`)
 
 Harness-owner edit (authorized): `src/backtest.py` `FOLD_SPACING` 14 -> 91. The v1-v8 layout

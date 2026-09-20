@@ -148,6 +148,26 @@ BIAS_GUARDRAIL = 0.02
 KEEP_ALPHA = 0.05   # sign-test significance for condition 1
 KEEP_FLOOR = 0.002  # minimum MEDIAN paired gain (condition 4) to matter at all
 
+# --- SPEC v10 Part A: season-aware fold weighting. The holdout is a spring window; the keep rule
+# can weight folds whose forecast season matches it, so a winter-specialist gain (which did not
+# transfer) is down-weighted before it earns a holdout shot. Default is UNWEIGHTED (fold_weights
+# None) -> every historical verdict reproduces byte-for-byte; season_match is opt-in per run.
+def season_tag(origin: pd.Timestamp, horizon: int = HORIZON) -> str:
+    days = [pd.Timestamp(origin) + pd.Timedelta(days=d) for d in range(horizon)]
+    if any((d.month == 12 and d.day >= 20) or (d.month == 1 and d.day <= 6) for d in days):
+        return "winter_holiday"
+    m = (pd.Timestamp(origin) + pd.Timedelta(days=horizon // 2)).month
+    return {12: "winter", 1: "winter", 2: "winter", 3: "spring", 4: "spring", 5: "spring",
+            6: "summer", 7: "summer", 8: "summer", 9: "autumn", 10: "autumn", 11: "autumn"}[m]
+
+# spring matches the holdout (2.0); winter/summer adjacent (1.0); winter_holiday down (0.5); autumn 1.0
+SEASON_MATCH_WEIGHTS = {"spring": 2.0, "winter_holiday": 0.5, "winter": 1.0, "summer": 1.0, "autumn": 1.0}
+
+def fold_weights_for(folds: list[dict], scheme: str) -> list[float] | None:
+    if scheme != "season_match":
+        return None
+    return [SEASON_MATCH_WEIGHTS.get(f.get("season_tag") or season_tag(pd.Timestamp(f["origin"])), 1.0) for f in folds]
+
 
 def load_parent(run_id: str) -> dict:
     path = DETAIL_DIR / f"{run_id}.json"
@@ -163,7 +183,7 @@ def load_parent(run_id: str) -> dict:
     return parent
 
 
-def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: str = "wrmsse") -> dict:
+def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: str = "wrmsse", fold_weights: list[float] | None = None) -> dict:
     """The v1 keep rule, evaluated on WRMSSE. All three conditions required for `kept`.
 
     1. paired gain: parent mean - child mean > 2 * max(parent spread, child spread),
@@ -191,13 +211,24 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
     # folds. Magnitude-independent: a run better on every fold passes regardless of how large
     # any single fold's gain is. Ties (exact 0) are dropped, as in a standard sign test.
     gain_f = [float(pf[metric]) - float(cf[metric]) for pf, cf in zip(p_folds, child_folds)]
-    gain = float(np.mean(gain_f))
-    nz = [g for g in gain_f if g != 0.0]
-    n = len(nz); n_up = sum(1 for g in nz if g > 0)
+    if fold_weights is not None:
+        # weighted sign test + median: replicate each fold by round(2*w) votes (spring 4, adjacent
+        # 2, winter_holiday 1), so a spring fold counts double toward the sign test and the median.
+        reps = [int(round(2 * w)) for w in fold_weights]
+        gain = float(sum(w * g for w, g in zip(fold_weights, gain_f)) / sum(fold_weights)) if sum(fold_weights) else 0.0
+        exp_nz = [g for g, r in zip(gain_f, reps) for _ in range(r) if g != 0.0]
+        n = len(exp_nz); n_up = sum(1 for g in exp_nz if g > 0)
+        med = float(np.median([g for g, r in zip(gain_f, reps) for _ in range(r)])) if sum(reps) else 0.0
+    else:
+        gain = float(np.mean(gain_f))
+        nz = [g for g in gain_f if g != 0.0]
+        n = len(nz); n_up = sum(1 for g in nz if g > 0)
+        med = float(np.median(gain_f))
     sign_p = (sum(math.comb(n, i) for i in range(n_up, n + 1)) / 2 ** n) if n else 1.0
     cond1 = {"pass": bool(n > 0 and sign_p < KEEP_ALPHA and gain > 0),
              "sign_p": sign_p, "alpha": KEEP_ALPHA, "folds_up": n_up, "folds_nonzero": n,
-             "gain": gain, "gain_f": gain_f,
+             "gain": gain, "gain_f": gain_f, "fold_weights": fold_weights,
+             "weighting": "season_match" if fold_weights is not None else "unweighted",
              "parent_mean": float(p_agg[metric]), "child_mean": float(child_row[metric])}
     per_fold = []
     for pf, cf in zip(p_folds, child_folds):
@@ -216,7 +247,6 @@ def keep_rule(child_row: dict, child_folds: list[dict], parent: dict, metric: st
     # (condition 1) is dominated by one extreme fold; e.g. the M5 recipe's holiday fold (+0.29)
     # outvotes seven calm losses. The median asks "is this model better on the TYPICAL fold?" and
     # rejects a win that rides on a single fold. Robust, role-free, no calendar covariate.
-    med = float(np.median(gain_f))
     cond4 = {"pass": bool(med > 0 and med > KEEP_FLOOR), "median_gain": med, "floor": KEEP_FLOOR}
 
     verdict = "kept" if (cond1["pass"] and cond2["pass"] and cond3["pass"] and cond4["pass"]) else "discarded"
@@ -318,6 +348,7 @@ def run_backtest(
     dataset_id: str = DEFAULT_DATASET,
     jobs: int = 1,
     bag_seeds: bool = BAG_SEEDS_DEFAULT,
+    fold_weights_scheme: str = "unweighted",
 ) -> dict:
     parent = load_parent(parent_id) if parent_id else None  # fail fast, before any fit
     ds = load_dataset(dataset_id)
@@ -402,6 +433,8 @@ def run_backtest(
         fold_mean.update(
             fold=i,
             origin=str(pd.Timestamp(origin).date()),
+            window=[str(pd.Timestamp(origin).date()), str((pd.Timestamp(origin) + pd.Timedelta(days=HORIZON - 1)).date())],
+            season_tag=season_tag(pd.Timestamp(origin), HORIZON),
             n_series=done[0]["n_series"],
             n_scored=done[0]["n_scored"],
             seeds_done=len(done),
@@ -474,7 +507,9 @@ def run_backtest(
         kr = {"parent": parent["run_id"], "verdict": "discarded", "reason": f"run status {status}"}
     else:
         use = metric if (metric in row and "seeds" in parent and all(HIER_KEY in parent["seeds"][s]["aggregate"] for s in parent["seeds"])) else "wrmsse"
-        kr = keep_rule(row, fold_metrics, parent, use)
+        _fw = fold_weights_for(fold_metrics, fold_weights_scheme)
+        kr = keep_rule(row, fold_metrics, parent, use, fold_weights=_fw)
+        kr["fold_weights_scheme"] = fold_weights_scheme
         row["verdict"] = kr["verdict"]
 
     DETAIL_DIR.mkdir(parents=True, exist_ok=True)
@@ -593,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fit-jobs", type=int, default=None,
                         help=f"worker processes for the per-fold fits (each keeps 4 threads); default floor(vCPU/4)={_default_fit_jobs}")
     parser.add_argument("--jobs", type=int, default=None, help="alias for --fit-jobs (kept for back-compat)")
+    parser.add_argument("--fold-weights", default="unweighted", choices=["unweighted", "season_match"], help="SPEC v10: season_match up-weights spring folds (matches the holdout); default unweighted reproduces historical verdicts")
     parser.add_argument("--bag-seeds", choices=["on", "off"], default="on" if BAG_SEEDS_DEFAULT else "off",
                         help="on (default): headline metrics score the seed-averaged forecast; off reproduces v1-v4 runs")
     args = parser.parse_args(argv)
@@ -623,7 +659,8 @@ def main(argv: list[str] | None = None) -> int:
         _resolved_fit_jobs = max(1, _fj)
         print(f"fit-jobs={_resolved_fit_jobs} (vCPU={_os.cpu_count()})")
         run_backtest(args.model, seeds, args.author, args.folds, args.parent or None,
-                     args.session, args.hypothesis, args.dataset, _resolved_fit_jobs, args.bag_seeds == "on")
+                     args.session, args.hypothesis, args.dataset, _resolved_fit_jobs, args.bag_seeds == "on",
+                     fold_weights_scheme=args.fold_weights)
     except SystemExit:
         raise
     except Exception as exc:  # log the failure rather than losing it
