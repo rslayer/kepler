@@ -1,5 +1,24 @@
 # Harness changelog
 
+## v10 Part A — root-cause fix: holdout_mirror fold layout — 2026-09-20 (tag `v10-mirror`)
+
+season_match weighting alone could not catch the ensemble mirage because NO backtest fold reached
+the holdout's May window (above). The fix: `--folds-scheme holdout_mirror` — 4 folds forecasting the
+holdout's exact calendar window (late-Apr..May) in prior years 2012-2015. The backtest now covers the
+dates it predicts.
+
+**Validation (recipe r154 -> cap511 r155, m5_screen, mirror):** cap511's mirror-fold gain is
+**+0.0061** (per-fold +0.0232/-0.0026/-0.0093/+0.0133), vs its quarterly gain +0.0176 (screen) /
++0.0143 (m5_all) and its actual holdout gain **+0.0041**. The mirror folds are holdout-calibrated:
+the 5:1 backtest->holdout shrinkage collapses to ~1.5:1. cap511 is DISCARDED on the mirror layout
+(2/4 folds, sign test fails under season_match) — correctly, since its holdout win was marginal and
+within the year-to-year May variance the mirror reveals. A May-failing mirage shows negative mirror
+gains and fails hard. This is the discrimination Part A needed: a backtest gain on the mirror layout
+now predicts holdout transfer, so the gate rule (score holdout only if gain >= 0.015) becomes meaningful.
+
+Parts B and C are screened on `--folds-scheme holdout_mirror --fold-weights season_match`. FROZEN_REF
+-> v10-mirror.
+
 ## v10 Part A — season-aware keep rule — 2026-09-20 (tag `v10-season`) — ACCEPTANCE FAILED, STOPPED
 
 SPEC v10 Part A adds a season-weighted keep rule: `season_tag` per fold (winter_holiday|winter|
