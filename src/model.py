@@ -364,6 +364,17 @@ class LGBMRecipe6CalendarL2(LGBMRecipe6Calendar):
     name = "recipe6_calendar_l2"; PARAMS = _L2
 
 
+class LGBMRecipe6CalendarL2Cap511(LGBMRecipe6CalendarL2):
+    """Champion candidate (SPEC v9): the recipe at higher capacity, num_leaves 127 -> 511. A
+    self-contained, stable named model equivalent to recipe_search with {num_leaves:511} (r147);
+    promoted after clearing m5_screen, the strict m5_all keep rule, the adversary (all 8 items),
+    and the frozen holdout (wrmsse_hier 0.622271 vs the recipe's 0.626358). Everything else is
+    recipe6_calendar_l2 unchanged."""
+
+    name = "recipe6_calendar_l2_cap511"
+    PARAMS = {**LGBMRecipe6CalendarL2.PARAMS, "num_leaves": 511}
+
+
 class LGBMRecipe6CalendarL2YoY(LGBMRecipe6CalendarL2):
     """Generalization play (A): a same-weekday-last-year level anchor on top of the champion.
 
@@ -894,6 +905,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe4RollingL2.name: LGBMRecipe4RollingL2,
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
+    LGBMRecipe6CalendarL2Cap511.name: LGBMRecipe6CalendarL2Cap511,
     LGBMRecipe6CalendarL2YoY.name: LGBMRecipe6CalendarL2YoY,
     LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
     LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
