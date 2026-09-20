@@ -100,7 +100,7 @@ def aggregate_forecast(panel: Panel, keys: list[str], origin: pd.Timestamp, hori
 
 
 def reconcile(bottom_pred: pd.DataFrame, agg_pred: pd.DataFrame, panel: Panel, keys: list[str],
-              clip: tuple[float, float] = (0.5, 2.0)) -> pd.DataFrame:
+              clip: tuple[float, float] = (0.5, 2.0), shrink: float = 1.0) -> pd.DataFrame:
     """Scale each bottom forecast so its aggregate group sum matches agg_pred (clipped)."""
     id_to_group = {panel.ids[i]: "|".join(str(panel.attrs[k][i]) for k in keys) for i in range(len(panel.ids))}
     out = bottom_pred.copy()
@@ -110,6 +110,9 @@ def reconcile(bottom_pred: pd.DataFrame, agg_pred: pd.DataFrame, panel: Panel, k
     a_aligned = out.set_index(["_group", "date"]).index.map(a).to_numpy(dtype=float)
     with np.errstate(divide="ignore", invalid="ignore"):
         factor = np.where((bu.to_numpy() > 1e-9) & np.isfinite(a_aligned), a_aligned / bu.to_numpy(), 1.0)
+    if shrink != 1.0:
+        with np.errstate(invalid="ignore"):
+            factor = np.power(np.clip(factor, 1e-9, None), shrink)  # partial reconciliation: nudge toward the aggregate, not all the way
     factor = np.clip(factor, clip[0], clip[1])
     out["forecast"] = out["forecast"].to_numpy() * factor
     return out[["id", "date", "forecast"]]
