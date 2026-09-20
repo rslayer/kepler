@@ -86,11 +86,29 @@ def bag_forecasts(preds: list[pd.DataFrame]) -> pd.DataFrame:
 
 # --------------------------------------------------------------------------- fold logic
 def make_folds(
-    panel: Panel, n_folds: int = N_FOLDS, horizon: int = HORIZON, spacing: int = FOLD_SPACING
+    panel: Panel, n_folds: int = N_FOLDS, horizon: int = HORIZON, spacing: int = FOLD_SPACING,
+    scheme: str = "quarterly",
 ) -> list[pd.Timestamp]:
-    """Origins of each fold, oldest first, `spacing` days apart. The last fold's window
-    ends on the snapshot's last day. With spacing < horizon, consecutive windows overlap."""
+    """Origins of each fold, oldest first.
+
+    scheme="quarterly" (default): `spacing` days apart, last window ends on the snapshot's last
+    day (the v9 layout; unchanged).
+    scheme="holdout_mirror" (SPEC v10 Part A fix): every fold forecasts the SAME calendar window
+    as the holdout (d_1914-1941, late-Apr..May) in a prior year, at 364-day steps back. The
+    backtest then actually covers the holdout's dates, so a candidate that fails only in May
+    (invisible to the quarterly layout, whose latest window ends Apr 24) is caught on the backtest.
+    """
     n_days = len(panel.dates)
+    if scheme == "holdout_mirror":
+        # the holdout origin is one past the snapshot (index n_days); mirror it 364*k days back.
+        origins = []
+        for k in range(1, n_folds + 1):
+            pos = n_days - 364 * k
+            if pos - horizon >= 365:  # a full year of history before the fold for training
+                origins.append(pd.Timestamp(panel.dates[pos]))
+        if len(origins) < 2:
+            raise SystemExit("holdout_mirror needs >=2 prior years of history")
+        return origins[::-1]  # oldest first
     needed = (n_folds - 1) * spacing + horizon
     if n_days < needed + horizon:
         raise SystemExit(f"snapshot has {n_days} days; need at least {needed + horizon}")
@@ -349,12 +367,13 @@ def run_backtest(
     jobs: int = 1,
     bag_seeds: bool = BAG_SEEDS_DEFAULT,
     fold_weights_scheme: str = "unweighted",
+    folds_scheme: str = "quarterly",
 ) -> dict:
     parent = load_parent(parent_id) if parent_id else None  # fail fast, before any fit
     ds = load_dataset(dataset_id)
     panel = Panel(ds)
     model = get_model(model_name)
-    origins = make_folds(panel, n_folds)
+    origins = make_folds(panel, n_folds, scheme=folds_scheme)
     seeds = tuple(seeds)
     sales, calendar, prices = scorer_frames(ds, origins[0])
     hierarchy = ds.roles.get("hierarchy") or []
@@ -364,7 +383,7 @@ def run_backtest(
     print(f"dataset={dataset_id} model={model_name} seeds={list(seeds)} author={author} jobs={jobs} "
           f"bag_seeds={'on' if bag_seeds else 'off'}")
     print(f"snapshot: {len(panel.ids)} series, {len(panel.dates)} days, last {panel.last_date.date()}")
-    print(f"fold origins ({len(origins)} folds, {FOLD_SPACING}-day spacing, {HORIZON}-day horizon): "
+    print(f"fold origins ({len(origins)} folds, scheme={folds_scheme}, {HORIZON}-day horizon): "
           + ", ".join(str(pd.Timestamp(o).date()) for o in origins))
 
     started = time.time()
@@ -629,6 +648,7 @@ def main(argv: list[str] | None = None) -> int:
                         help=f"worker processes for the per-fold fits (each keeps 4 threads); default floor(vCPU/4)={_default_fit_jobs}")
     parser.add_argument("--jobs", type=int, default=None, help="alias for --fit-jobs (kept for back-compat)")
     parser.add_argument("--fold-weights", default="unweighted", choices=["unweighted", "season_match"], help="SPEC v10: season_match up-weights spring folds (matches the holdout); default unweighted reproduces historical verdicts")
+    parser.add_argument("--folds-scheme", default="quarterly", choices=["quarterly", "holdout_mirror"], help="SPEC v10: holdout_mirror = folds forecast the holdout calendar window (May) in prior years")
     parser.add_argument("--bag-seeds", choices=["on", "off"], default="on" if BAG_SEEDS_DEFAULT else "off",
                         help="on (default): headline metrics score the seed-averaged forecast; off reproduces v1-v4 runs")
     args = parser.parse_args(argv)
@@ -660,7 +680,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"fit-jobs={_resolved_fit_jobs} (vCPU={_os.cpu_count()})")
         run_backtest(args.model, seeds, args.author, args.folds, args.parent or None,
                      args.session, args.hypothesis, args.dataset, _resolved_fit_jobs, args.bag_seeds == "on",
-                     fold_weights_scheme=args.fold_weights)
+                     fold_weights_scheme=args.fold_weights, folds_scheme=args.folds_scheme)
     except SystemExit:
         raise
     except Exception as exc:  # log the failure rather than losing it
