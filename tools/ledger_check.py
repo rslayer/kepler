@@ -50,6 +50,15 @@ def main():
     rows = _rows()
     by_id = {r["hypothesis_id"]: r for r in rows}
 
+    if a.dry:
+        from collections import Counter
+        st = Counter(r["status"] for r in rows); lv = Counter(r["lever"] for r in rows)
+        bad = [r["hypothesis_id"] for r in rows if r["status"] in DEAD and (not r["mechanism"] or r["rejected_by"] == "n/a")]
+        print(f"ledger OK: {len(rows)} rows | status {dict(st)} | lever {dict(lv)}")
+        print(f"rejected rows missing mechanism/rejected_by: {bad or 'none'}")
+        if bad: sys.exit(2)
+        return
+
     if a.propose:
         if not a.lever or not a.mechanism:
             print("propose needs --lever and --mechanism"); sys.exit(2)
