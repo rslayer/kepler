@@ -1,5 +1,20 @@
 # Harness changelog
 
+## v10 Parts B & C — diversity levers, both discarded — 2026-09-20
+
+Part B (cross-family FM blend, H173): zero-shot Chronos-Bolt-small standalone is 2.6x worse than the
+champion (hier 1.68 vs 0.65), catastrophic at aggregate levels (L1 5.5x), bias -0.35 (under-forecasts
+intermittent demand). Opposite of the FM-strong-at-aggregate premise. Blends stopped after the
+standalone; mechanism recorded. Off-the-shelf zero-shot FM not competitive on intermittent M5.
+
+Part C (level-aware aggregate feature, H174): store-cat aggregate level as a top-down feature is a WASH
+(+0.0018 mirror / +0.0020 quarterly, discarded, below the 0.015 gate). Helps mid-hierarchy levels and
+calm/spring folds but hurts the top levels and holidays; nets zero. C2 reduces to the failed shrunk
+reconciliation (H171). Follow-up lead: gate the l3 feature off in holiday windows.
+
+Net v10: Part A (holdout_mirror) is the durable win — the backtest is now holdout-calibrated. B and C
+are recorded negatives. Champion unchanged (v2, holdout 0.622). Zero holdout shots spent this spec.
+
 ## v10 Part A — root-cause fix: holdout_mirror fold layout — 2026-09-20 (tag `v10-mirror`)
 
 season_match weighting alone could not catch the ensemble mirage because NO backtest fold reached
