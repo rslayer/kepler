@@ -430,6 +430,29 @@ class LGBMRecipeLevel3(LGBMRecipe6CalendarL2):
         return out
 
 
+class LGBMRecipeLevel3Gated(LGBMRecipeLevel3):
+    """SPEC v10 Part C follow-up (H175): the level-3 aggregate feature (H174) helped calm months
+    and spring but HURT holidays (Dec -0.0116), netting a wash. This gates l3_level to NaN for rows
+    whose target day is in a holiday window (Dec 20 - Jan 6), so LightGBM treats it as missing there
+    and learns the calm-season aggregate relationship without holiday-row corruption. The holdout is
+    a spring window (l3 stays active), so the gate should keep the calm/spring gain and shed the
+    holiday loss."""
+
+    name = "recipe6_calendar_l2_l3g"
+
+    def _inject_l3(self, frame: pd.DataFrame, panel: Panel) -> pd.DataFrame:
+        frame = super()._inject_l3(frame, panel)
+        d = pd.DatetimeIndex(frame["date"])
+        holiday = (((d.month == 12) & (d.day >= 20)) | ((d.month == 1) & (d.day <= 6))).to_numpy()
+        vals = frame["l3_level"].to_numpy().copy()
+        vals[holiday] = np.nan   # missing -> LightGBM ignores l3 in holiday windows
+        frame["l3_level"] = vals
+        return frame
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "l3_holiday_gate": "dec20-jan6"}
+
+
 class LGBMRecipe6CalendarL2YoY(LGBMRecipe6CalendarL2):
     """Generalization play (A): a same-weekday-last-year level anchor on top of the champion.
 
@@ -1059,6 +1082,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipe6CalendarL2Cap511.name: LGBMRecipe6CalendarL2Cap511,
     LGBMRecipeLevel3.name: LGBMRecipeLevel3,
+    LGBMRecipeLevel3Gated.name: LGBMRecipeLevel3Gated,
     LGBMRecipe6CalendarL2YoY.name: LGBMRecipe6CalendarL2YoY,
     LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
     LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
