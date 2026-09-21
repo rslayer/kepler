@@ -443,7 +443,7 @@ class LGBMRecipeLevel3Gated(LGBMRecipeLevel3):
     def _inject_l3(self, frame: pd.DataFrame, panel: Panel) -> pd.DataFrame:
         frame = super()._inject_l3(frame, panel)
         d = pd.DatetimeIndex(frame["date"])
-        holiday = (((d.month == 12) & (d.day >= 20)) | ((d.month == 1) & (d.day <= 6))).to_numpy()
+        holiday = np.asarray(((d.month == 12) & (d.day >= 20)) | ((d.month == 1) & (d.day <= 6)))
         vals = frame["l3_level"].to_numpy().copy()
         vals[holiday] = np.nan   # missing -> LightGBM ignores l3 in holiday windows
         frame["l3_level"] = vals
