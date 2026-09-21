@@ -375,6 +375,61 @@ class LGBMRecipe6CalendarL2Cap511(LGBMRecipe6CalendarL2):
     PARAMS = {**LGBMRecipe6CalendarL2.PARAMS, "num_leaves": 511}
 
 
+class LGBMRecipeLevel3(LGBMRecipe6CalendarL2):
+    """SPEC v10 Part C / Variant C1 (Researcher B, level-aware): the item model gains ONE top-down
+    feature, `l3_level` = the item's store-category AGGREGATE level (rolling mean over L3_WINDOW days)
+    measured strictly as-of each row's origin. The aggregate level is smooth (30 groups), so it gives
+    the noisy item model a stable top-down anchor; the item_id categorical lets the model scale it per
+    item. Leak-free by construction (reads the aggregate only before the origin). No post-hoc
+    reconciliation (which washed out H159/H171); the signal enters as a feature the model trains on."""
+
+    name = "recipe6_calendar_l2_l3"
+    L3_KEYS = ["store_id", "cat_id"]
+    L3_WINDOW = 28
+
+    @property
+    def features(self) -> list[str]:
+        return super().features + ["l3_level"]
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "l3_keys": list(self.L3_KEYS), "l3_window": self.L3_WINDOW}
+
+    def _inject_l3(self, frame: pd.DataFrame, panel: Panel) -> pd.DataFrame:
+        from .reconcile import group_index, aggregate_values
+        groups, inv = group_index(panel, self.L3_KEYS)
+        agg = aggregate_values(panel, inv, len(groups))  # (n_groups, n_days), leak handled by the slice below
+        id_to_ginv = {panel.ids[i]: int(inv[i]) for i in range(len(panel.ids))}
+        pos_map = {ts: i for i, ts in enumerate(panel.dates)}
+        tgt = np.array([pos_map.get(pd.Timestamp(d), -1) for d in frame["date"]])
+        h = frame["horizon"].astype(int).to_numpy()
+        origin_pos = tgt - (h - 1)                     # each row's origin
+        ginv = frame["id"].map(id_to_ginv).to_numpy()
+        W = self.L3_WINDOW
+        level = np.zeros(len(frame), dtype=np.float64)
+        for op in np.unique(origin_pos):
+            if op <= 0:
+                continue
+            lo = max(0, op - W)
+            glevel = agg[:, lo:op].mean(axis=1)        # strictly before the origin -> leak-free
+            m = origin_pos == op
+            level[m] = glevel[ginv[m]]
+        frame = frame.copy()
+        frame["l3_level"] = level
+        return frame
+
+    def forecast(self, panel, origin, horizon=HORIZON, seed: int = 42):
+        train = build_training_set(panel, origin, n_origins=self.N_TRAIN_ORIGINS,
+                                   spacing_days=self.TRAIN_ORIGIN_SPACING, horizon=horizon)
+        predict = build_frame(panel, origin, horizon, with_target=False)
+        train = self._inject_l3(train, panel)
+        predict = self._inject_l3(predict, panel)
+        preds = self._fit_predict(train, predict, seed)
+        preds = self.postprocess(predict, preds)
+        out = predict[["id", "date"]].copy()
+        out["forecast"] = np.clip(preds, 0.0, None)
+        return out
+
+
 class LGBMRecipe6CalendarL2YoY(LGBMRecipe6CalendarL2):
     """Generalization play (A): a same-weekday-last-year level anchor on top of the champion.
 
@@ -1003,6 +1058,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe5PriceL2.name: LGBMRecipe5PriceL2,
     LGBMRecipe6CalendarL2.name: LGBMRecipe6CalendarL2,
     LGBMRecipe6CalendarL2Cap511.name: LGBMRecipe6CalendarL2Cap511,
+    LGBMRecipeLevel3.name: LGBMRecipeLevel3,
     LGBMRecipe6CalendarL2YoY.name: LGBMRecipe6CalendarL2YoY,
     LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
     LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
