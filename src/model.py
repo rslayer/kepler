@@ -453,6 +453,14 @@ class LGBMRecipeLevel3Gated(LGBMRecipeLevel3):
         return {**super().extra_config(), "l3_holiday_gate": "dec20-jan6"}
 
 
+class LGBMRecipeLevel3GatedCap511(LGBMRecipeLevel3Gated):
+    """Recombination H176 = capacity (H169, num_leaves 511) + holiday-gated level-3 feature (H175).
+    The champion is cap511; this tests whether the level-aware gain stacks ON TOP of capacity vs the
+    champion, the real bar to beat."""
+    name = "recipe6_calendar_l2_l3g_cap511"
+    PARAMS = {**LGBMRecipe6CalendarL2.PARAMS, "num_leaves": 511}
+
+
 class LGBMRecipe6CalendarL2YoY(LGBMRecipe6CalendarL2):
     """Generalization play (A): a same-weekday-last-year level anchor on top of the champion.
 
@@ -1083,6 +1091,7 @@ MODELS: dict[str, type] = {
     LGBMRecipe6CalendarL2Cap511.name: LGBMRecipe6CalendarL2Cap511,
     LGBMRecipeLevel3.name: LGBMRecipeLevel3,
     LGBMRecipeLevel3Gated.name: LGBMRecipeLevel3Gated,
+    LGBMRecipeLevel3GatedCap511.name: LGBMRecipeLevel3GatedCap511,
     LGBMRecipe6CalendarL2YoY.name: LGBMRecipe6CalendarL2YoY,
     LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
     LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
