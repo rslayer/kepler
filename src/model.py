@@ -461,6 +461,39 @@ class LGBMRecipeLevel3GatedCap511(LGBMRecipeLevel3Gated):
     PARAMS = {**LGBMRecipe6CalendarL2.PARAMS, "num_leaves": 511}
 
 
+class LGBMRecipeLevel3GatedEventsCap511(LGBMRecipeLevel3):
+    """H177: widen the holiday gate to ALL major events. The l3 aggregate feature is masked (NaN)
+    whenever the target day is within +/-3 days of ANY calendar event (event_flag, which includes
+    Christmas). Hypothesis: l3 is only reliable in genuinely calm periods, so masking every event
+    window gives a cleaner, more seed-robust signal than the Christmas-only gate (whose gain was
+    within seed noise, H176). Built on cap511 (the champion base). NOTE: unlike the Christmas gate,
+    this masks l3 on the holdout window's own events (Cinco de Mayo, Mother's Day)."""
+
+    name = "recipe6_calendar_l2_l3ge_cap511"
+    PARAMS = {**LGBMRecipe6CalendarL2.PARAMS, "num_leaves": 511}
+    EVENT_PAD = 3
+
+    def extra_config(self) -> dict:
+        return {**super().extra_config(), "l3_gate": "all_events_pm%d" % self.EVENT_PAD}
+
+    def _inject_l3(self, frame: pd.DataFrame, panel: Panel) -> pd.DataFrame:
+        frame = super()._inject_l3(frame, panel)
+        cal = panel.calendar
+        if "event_flag" in cal.columns:
+            ef = cal["event_flag"].reindex(panel.dates).fillna(0).to_numpy().astype(float)
+            dil = ef.copy()
+            for k in range(1, self.EVENT_PAD + 1):
+                dil[k:] = np.maximum(dil[k:], ef[:-k])
+                dil[:-k] = np.maximum(dil[:-k], ef[k:])
+            pos_map = {ts: i for i, ts in enumerate(panel.dates)}
+            tpos = np.array([pos_map.get(pd.Timestamp(d), -1) for d in frame["date"]])
+            ev = np.array([dil[t] if t >= 0 else 0.0 for t in tpos])
+            vals = frame["l3_level"].to_numpy().copy()
+            vals[ev > 0] = np.nan
+            frame["l3_level"] = vals
+        return frame
+
+
 class LGBMRecipe6CalendarL2YoY(LGBMRecipe6CalendarL2):
     """Generalization play (A): a same-weekday-last-year level anchor on top of the champion.
 
@@ -1092,6 +1125,7 @@ MODELS: dict[str, type] = {
     LGBMRecipeLevel3.name: LGBMRecipeLevel3,
     LGBMRecipeLevel3Gated.name: LGBMRecipeLevel3Gated,
     LGBMRecipeLevel3GatedCap511.name: LGBMRecipeLevel3GatedCap511,
+    LGBMRecipeLevel3GatedEventsCap511.name: LGBMRecipeLevel3GatedEventsCap511,
     LGBMRecipe6CalendarL2YoY.name: LGBMRecipe6CalendarL2YoY,
     LGBMRecipe6CalendarL2YoYEaster.name: LGBMRecipe6CalendarL2YoYEaster,
     LGBMRecipe6CalendarL2Hist3y.name: LGBMRecipe6CalendarL2Hist3y,
