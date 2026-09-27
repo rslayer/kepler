@@ -64,6 +64,51 @@ level and both tiers, but the frozen holdout rejected it (0.644 vs 0.626) - a wi
 win that did not generalise to the spring evaluation period. Not promoted. This is the harness
 catching a backtest mirage, exactly what the frozen holdout is for.
 
+
+## v9-v11 state — 2026-09-27 (tags `v9-*`, `v10-*`; champion `champion/m5_all/v2`)
+
+**Champion v2 — capacity.** `recipe6_calendar_l2_cap511` (the recipe at num_leaves 511) is
+`champion/m5_all/v2`, holdout wrmsse_hier **0.622271** vs v1's 0.626358 (+0.0041, the first
+change to actually beat the frozen holdout and generalise — the recursive+direct ensemble had
+won the backtest and *lost* the holdout, and the holdout gate caught it). Window-adjusted, top-50
+(published 0.576) is ~**0.591** on our harder evaluation window (seasonal_naive 0.870 here vs
+0.847 published), so the champion sits **~0.031 from top-50** — past every published benchmark,
+not yet a medal.
+
+**v9 — parallel search, serial gate.** Fit-level parallelism (`--fit-jobs`, default floor(vCPU/4))
++ a per-fold feature cache give ~2x locally, **bit-identical** to serial (proven r134 vs r148).
+The hypothesis ledger became the loop's memory (`hypotheses/m5_all/ledger.csv`, `LEDGER_RULES.md`,
+`tools/ledger_check.py` blocks dead re-runs incl. the recursive family). A config-driven
+self-improvement loop (`tools/search_loop.py`) with a spring-fold gate found the capacity lever;
+3-year training history was correctly rejected as a spring false-positive by the year-round folds.
+
+**v10 — the durable win: a holdout-calibrated backtest.** The old fold layout ended at the
+snapshot and never reached the holdout's May window, so backtest gains overstated holdout gains
+~5:1. `--folds-scheme holdout_mirror` (folds forecast the holdout's calendar window in prior
+years) collapsed that to ~1.5:1: a backtest gain now predicts holdout transfer, so the loop no
+longer wastes the scarce holdout shot. Season-weighting the keep rule (`season_match`) alone was
+insufficient (the failure lives in a month no fold covered).
+
+**Levers now exhausted (each a ledger row with a mechanism).** feature, horizon (finer buckets
+thin sparse holiday signal), objective, recursive (compounding bias, blocked), capacity>511
+(overfits), reconciliation (H159/H171 wash), **cross-family foundation-model blend** (zero-shot
+Chronos-Bolt is 2.6x worse on intermittent M5, bias -0.35, worst at aggregate — a real finding:
+off-the-shelf FMs are not leaderboard-ready here), and **level-aware aggregate feature** (real
+direction — helps calm/spring — but the gain sits at the seed-noise floor under every gating;
+the adversary's unseen-seed check caught it before a holdout shot was spent).
+
+**What the loop demonstrated end-to-end.** It proposed a lever (capacity), gated it through
+screen -> strict m5_all keep -> adversary -> frozen holdout, promoted the one that transferred,
+and **rejected every mirage** (the ensemble on the holdout; hist3y, finer buckets, reconciliation,
+the FM, and the level-aware feature on the calibrated backtest + adversary noise floor). No
+holdout shot was ever spent on a candidate that failed. That is the prototype's actual result:
+a self-improving loop whose integrity gate does not lie.
+
+**To close the last ~0.031 to top-50** would take a materially different approach — a diverse
+model family of comparable quality (a fine-tuned, not zero-shot, FM), or a much wider compute
+search on a real cloud box — not another tweak of an exhausted lever. That is a funding/compute
+decision, not a harness one.
+
 ## The five numbers
 
 ### 1. Researcher runs per hour: **49**
