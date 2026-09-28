@@ -109,6 +109,16 @@ model family of comparable quality (a fine-tuned, not zero-shot, FM), or a much 
 search on a real cloud box — not another tweak of an exhausted lever. That is a funding/compute
 decision, not a harness one.
 
+## Closure — 2026-09-28 (owner decisions)
+
+- **M5 track banked.** Champion stays `champion/m5_all/v2` (cap511, holdout 0.622271, ~0.031 from
+  window-adjusted top-50). The prototype's job — proving an unattended loop with an honest gate — is
+  done; no further M5 lever search is planned.
+- **Cloud box dropped.** SPEC v11 (ensemble) is closed unexecuted (its preflight required a cloud box).
+  Part A cloud acceptance rows in `tools/cloud/BENCHMARK.md` stay TBD by decision, not by omission.
+- **Production follow-on out of scope.** Applying this harness to a production forecasting problem is
+  separate work and not part of this public repository, which stays public M5 only.
+
 ## The five numbers
 
 ### 1. Researcher runs per hour: **49**
