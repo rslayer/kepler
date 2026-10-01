@@ -182,8 +182,8 @@ acceptance criteria; the agent executed them and stopped at each boundary for re
 human owned the scorer, the holdout, and every promotion decision. The agent roles inside the
 loop (researcher, adversary, curator) are defined by the `CLAUDE.md` files.
 
-## Data
+## License and data
 
-M5 data belongs to its providers and is used under the Kaggle competition rules. This repository
+The code is released under the [MIT License](LICENSE). M5 data belongs to its providers and is used under the Kaggle competition rules. This repository
 does not contain raw M5 data: `make data` downloads it with your own Kaggle credentials, and only
 the SHA-256 manifest is committed.
