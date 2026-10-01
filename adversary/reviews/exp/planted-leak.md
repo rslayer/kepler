@@ -2,9 +2,9 @@
 
 **Verdict: FAIL** (items 1 and 2). Automatic.
 
-Branch commit: 04e890e "exp: local 7-day smoothed level feature (r029)". Model `lgbm_local_smooth`,
+Branch commit: 51e0db4 "exp: local 7-day smoothed level feature (r029)". Model `lgbm_local_smooth`,
 logged on the branch as r029 (WRMSSE 0.622419) claiming to beat r002 (0.782956).
-Reviewed from main at 37f2c1b with main's frozen driver and scorer; src/ restored after every rerun.
+Reviewed from main at d2dcb5c with main's frozen driver and scorer; src/ restored after every rerun.
 
 ## 1. Look-ahead — FAIL
 
@@ -57,7 +57,7 @@ the branch introduces no reference to holdout/.
 
 Command: `git diff v0-harness exp/planted-leak -- src/scorer.py src/report.py src/score_holdout.py src/backtest.py`
 Only src/backtest.py differs (8 lines): the `KEPLER_RUNS_DIR` redirect for RUNS_CSV/DETAIL_DIR.
-That change is main's own commit 37f2c1b (`git diff main exp/planted-leak -- src/backtest.py` is
+That change is main's own commit d2dcb5c (`git diff main exp/planted-leak -- src/backtest.py` is
 empty) and does not touch `make_folds` or the fold loop in `run_backtest`. `make verify-frozen` on
 main is clean.
 

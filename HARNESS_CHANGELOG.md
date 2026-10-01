@@ -398,7 +398,7 @@ r037 FAIL on item 5 (gain confined to the two folds containing 25 Dec, zero else
 overruled to PASS by the human as structural, recorded as row r055 beside the FAIL row
 r053; r044 INCONCLUSIVE on item 6 (66% of gain in top-5% series). Curator branch passed
 item 9 with three flagged lines, which the human amended before the gate. Merge gate:
-all four conditions met; merged as commit 9626220. Scorecard: keep_rate 0.08 -> 0.125,
+all four conditions met; merged as commit ccfeb08. Scorecard: keep_rate 0.08 -> 0.125,
 repeat_rate 0 -> 0. Fixes made during the cycle: scorecard repeats now use the ledger as
 committed at session start (re-testing an inconclusive row is allowed and was being
 counted); merge_gate falls back to a merge commit because main always moves after a

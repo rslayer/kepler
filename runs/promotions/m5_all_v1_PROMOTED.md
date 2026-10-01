@@ -1,4 +1,4 @@
-# PROMOTED 2026-09-17 — the blocker below was cleared by a clean re-yardstick (identical 0.626358 on committed cb03fae). champion/m5_all/v1 = recipe6_calendar_l2 (r106). This file kept for the decision record.
+# PROMOTED 2026-09-17 — the blocker below was cleared by a clean re-yardstick (identical 0.626358 on committed 76f2bd4). champion/m5_all/v1 = recipe6_calendar_l2 (r106). This file kept for the decision record.
 
 # Promotion PENDING — m5_all recipe → champion/m5_all/v1 (NOT executed)
 
@@ -29,7 +29,7 @@ rolling + price + calendar). Current m5_all champion: lgbm_baseline (r083, 0.785
 ## BLOCKER — the yardstick's provenance cannot be reproduced
 The human one-shot yardstick (runs/holdout.csv) recorded recipe6_calendar_l2 m5_all
 wrmsse_hier 0.626358, but:
-- it was scored on a **dirty tree**: git_commit `2bbc887-dirty` (2bbc887 = 2026-09-13 23:55,
+- it was scored on a **dirty tree**: git_commit `4bf5e2e-dirty` (4bf5e2e = 2026-09-13 23:55,
   "model: recipe_scaled …"), i.e. uncommitted changes on top of that commit;
 - its config_hash `1ae10e30d56f` matches **no committed run** in runs.csv;
 - the runs of that era (r100–r102) **lost their detail JSONs** in the v4 renumbering.

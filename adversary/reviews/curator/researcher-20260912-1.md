@@ -9,14 +9,14 @@ objections are recorded below (two factual misstatements in the Priors block and
 instruction-leakage risk); none is a listed FAIL trigger, and the human should read them before
 the merge gate runs.
 
-Branch: one commit e772cfc "curator: researcher-20260912-1" on top of main fcc9f92
-(`git log --oneline main..curator/researcher-20260912-1`; `git merge-base` = fcc9f92;
+Branch: one commit 374e58b "curator: researcher-20260912-1" on top of main 34b6ffb
+(`git log --oneline main..curator/researcher-20260912-1`; `git merge-base` = 34b6ffb;
 `git merge-base --is-ancestor v1-harness curator/researcher-20260912-1` true). Files touched
 (`git diff --stat main curator/researcher-20260912-1`): CLAUDE.md (+34/-27 lines net 34/25),
 LESSONS.md (+3), hypotheses/ledger.csv (14 lines: 6 rows modified, 2 rows added, none deleted;
 main 38 rows + header, branch 40 rows + header), curator/reports/researcher-20260912-1.md (new).
 `git diff --stat main curator/researcher-20260912-1 -- runs/ src/ findings/` is empty. Reviewed
-from main at fcc9f92, session adversary-20260913-2, no reruns (item 9 needs none), nothing under
+from main at 34b6ffb, session adversary-20260913-2, no reruns (item 9 needs none), nothing under
 holdout/ read.
 
 Items 1-8 do not apply: the branch changes no code, no run, and no frozen file.

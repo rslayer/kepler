@@ -8,13 +8,13 @@ reproducible; what fails is the requirement that the improvement hold on every f
 
 This completes adversary/reviews/exp/r070.md (adversary-20260913-3, runs.csv row r076), which was
 INCONCLUSIVE only because items 7 and 8 could not run in that session. Items 1-4 are not repeated
-here; their findings stand and are summarized in one line each. Reviewed from main at d300acd,
+here; their findings stand and are summarized in one line each. Reviewed from main at 3a80ea3,
 session adversary-20260913-5. Both reruns used the notes' recipe (checkout exp/r070 --
 src/features.py src/model.py; KEPLER_RUNS_DIR=adversary/reruns make backtest ...; checkout main --
 src/features.py src/model.py). `src/` was restored after each; `git status` is clean apart from
 this file and the runs.csv row.
 
-Branch: exp/r070 = r060 + r061 + 5219469 (`lgbm_xmas0_tgd_r3_o80hl120`: 80 training origins,
+Branch: exp/r070 = r060 + r061 + bc76ce8 (`lgbm_xmas0_tgd_r3_o80hl120`: 80 training origins,
 120-day recency half-life on r061). Logged r070: WRMSSE 0.798186, spread 0.001385, verdict kept
 against parent r061 (0.803303). Champion lgbm_xmas0 is r037 (0.805456).
 

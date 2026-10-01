@@ -13,10 +13,10 @@ diagnoses fold 7's scored window, 2016-02-15..03-13, and then builds "a targeted
 `tools/check_claude_diff.py` passes and the file list is in bounds. Neither of those gates is the
 reason for the FAIL.
 
-Branch: one commit d7f2bf2 "curator: researcher-20260913-2" on main's 5b02b5e
-(`git log --oneline main..curator/researcher-20260913-2`; `git merge-base` = 5b02b5e;
+Branch: one commit 27e59a7 "curator: researcher-20260913-2" on main's f749197
+(`git log --oneline main..curator/researcher-20260913-2`; `git merge-base` = f749197;
 `git merge-base --is-ancestor v1-harness curator/researcher-20260913-2` true). Reviewed from main
-at 5b02b5e, session adversary-20260913-4. No reruns (item 9 needs none), no checkout of the branch,
+at f749197, session adversary-20260913-4. No reruns (item 9 needs none), no checkout of the branch,
 and nothing under holdout/ read.
 
 Items 1-8 do not apply: the branch changes no code, no run, and no frozen file (see 9a).

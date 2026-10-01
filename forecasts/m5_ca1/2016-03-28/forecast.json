@@ -7,7 +7,7 @@
   "model_name": "lgbm_xmas0",
   "champion_backtest_run": "r037",
   "config_hash": "f658cb7985d4",
-  "git_commit": "da32deb",
+  "git_commit": "b31caf7",
   "features": [
     "horizon",
     "dow",

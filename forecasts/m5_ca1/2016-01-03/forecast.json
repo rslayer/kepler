@@ -7,7 +7,7 @@
   "model_name": "lgbm_baseline",
   "champion_backtest_run": "r033",
   "config_hash": "9bbdad874d23",
-  "git_commit": "1e1d3a3-dirty",
+  "git_commit": "6903bef-dirty",
   "features": [
     "horizon",
     "dow",
